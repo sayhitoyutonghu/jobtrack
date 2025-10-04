@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>JobTrack Settings</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <div class="container">
+    <!-- Header -->
+    <div class="header">
+      <h1>🏷️ JobTrack</h1>
+      <p class="subtitle">Email Classifier</p>
+    </div>
+
+    <!-- API Status -->
+    <div class="status-section">
+      <h2>API Status</h2>
+      <div id="apiStatus" class="status-indicator">
+        <span class="status-dot" id="statusDot"></span>
+        <span id="statusText">Checking...</span>
+      </div>
+      <button id="refreshStatus" class="btn-secondary">Refresh Status</button>
+    </div>
+
+    <!-- Settings -->
+    <div class="settings-section">
+      <h2>Settings</h2>
+      
+      <div class="setting-item">
+        <label class="switch">
+          <input type="checkbox" id="enabledToggle" checked>
+          <span class="slider"></span>
+        </label>
+        <div class="setting-info">
+          <div class="setting-label">Enable Extension</div>
+          <div class="setting-desc">Turn on/off email classification</div>
+        </div>
+      </div>
+
+      <div class="setting-item">
+        <label class="switch">
+          <input type="checkbox" id="autoClassifyToggle" checked>
+          <span class="slider"></span>
+        </label>
+        <div class="setting-info">
+          <div class="setting-label">Auto-Classify</div>
+          <div class="setting-desc">Automatically classify emails when opened</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Categories -->
+    <div class="categories-section">
+      <h2>Supported Categories</h2>
+      <div id="categoriesList" class="categories-list">
+        <div class="loading">Loading categories...</div>
+      </div>
+    </div>
+
+    <!-- Stats -->
+    <div class="stats-section">
+      <h2>Statistics</h2>
+      <div class="stats-grid">
+        <div class="stat-item">
+          <div class="stat-value" id="totalClassified">0</div>
+          <div class="stat-label">Emails Classified</div>
+        </div>
+        <div class="stat-item">
+          <div class="stat-value" id="avgConfidence">0%</div>
+          <div class="stat-label">Avg Confidence</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Actions -->
+    <div class="actions-section">
+      <button id="testConnection" class="btn-primary">Test API Connection</button>
+      <button id="clearData" class="btn-secondary">Clear Data</button>
+    </div>
+
+    <!-- Footer -->
+    <div class="footer">
+      <p>API: <span id="apiUrl">http://localhost:5000</span></p>
+      <p class="version">v1.0.0</p>
+    </div>
+  </div>
+
+  <script src="popup.js"></script>
+</body>
+</html>

@@ -71,16 +71,20 @@ const JobEmailCategorizationApp = () => {
       const response = await fetch('http://localhost:3000/api/labels');
       if (response.ok) {
         const data = await response.json();
-        setCategories(data.map((label, index) => ({
-          id: index + 1,
-          name: label.name,
-          label: label.name,
-          description: label.description,
-          color: label.color?.backgroundColor || '#cccccc',
-          icon: label.icon || '📧',
-          enabled: label.enabled !== false,
-          moveToFolder: label.moveToFolder || false
-        })));
+        if (data.success) {
+          setCategories(data.labels.map((label, index) => ({
+            id: label.id,
+            name: label.name,
+            label: label.name,
+            description: label.description,
+            color: label.color?.backgroundColor || '#cccccc',
+            icon: label.icon || '📧',
+            enabled: label.enabled !== false,
+            moveToFolder: label.moveToFolder || false
+          })));
+        } else {
+          setError(data.error || 'Failed to load labels');
+        }
       }
     } catch (err) {
       console.error('Failed to fetch labels:', err);
@@ -106,11 +110,13 @@ const JobEmailCategorizationApp = () => {
         })
       });
       
-      if (response.ok) {
+      const data = await response.json();
+      
+      if (response.ok && data.success) {
         setSuccess(true);
         setTimeout(() => setSuccess(false), 3000);
       } else {
-        throw new Error('Failed to update labels');
+        throw new Error(data.error || 'Failed to update labels');
       }
     } catch (err) {
       console.error('Failed to update labels:', err);
