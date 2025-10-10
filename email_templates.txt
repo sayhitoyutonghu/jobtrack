@@ -1,0 +1,23 @@
+===
+Thank you for your application to TechCorp | We have received your application for the Software Engineer position and will review it within 2 weeks. Our team will contact you if your qualifications match our requirements. | 1
+
+===
+Interview Invitation - Product Manager | Congratulations! We would like to invite you for an interview for the Product Manager position. Please reply with your availability for next week. We are excited to learn more about your experience. | 2
+
+===
+Your interview is confirmed | This email confirms your interview appointment on Friday, March 15th at 2:00 PM. Please bring a copy of your resume and prepare for technical questions about React and Node.js. | 3
+
+===
+Update on your application status | Thank you for your patience. We have completed the initial review of your application and are moving forward with other candidates at this time. We encourage you to apply for future positions. | 4
+
+===
+Job Offer - Senior Developer Position | We are thrilled to extend an offer for the Senior Developer position at StartupXYZ. Please review the attached offer letter with salary details and benefits information. | 5
+
+===
+New Software Engineer jobs match your preferences | LinkedIn Job Alert: 12 new Software Engineer positions have been posted in San Francisco. View jobs from Google, Facebook, and other top tech companies. | 6
+
+===
+Application Status Update | Your application for the Data Scientist role is currently under review by our hiring team. We expect to complete the review process by the end of next week. | 7
+
+===
+Exciting Opportunity - Full Stack Developer | Hi there! I came across your profile and think you would be perfect for a Full Stack Developer role at a growing fintech startup. Are you open to discussing new opportunities? | 8
