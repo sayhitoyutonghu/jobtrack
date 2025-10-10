@@ -1,325 +1,408 @@
-import React, { useState, useEffect } from 'react';
-import { Settings, Mail, Calendar, Bell, MessageSquare, Archive, Tag, AlertCircle, ToggleLeft, ToggleRight } from 'lucide-react';
+import React, { useEffect, useMemo, useState } from 'react';
+import {
+  Settings,
+  AlertCircle,
+  PlayCircle,
+  PauseCircle,
+  LoaderCircle,
+  ShieldCheck,
+  RefreshCcw,
+  Inbox
+} from 'lucide-react';
+import DashboardView from './Dashboard.jsx';
+import { authApi, gmailApi } from './api/client.js';
+import './App.css';
 
 const JobEmailCategorizationApp = () => {
-  const [categories, setCategories] = useState([
-    { 
-      id: 1, 
-      name: 'Application', 
-      label: 'Application',
-      description: 'All job application related emails (applied, viewed, job alerts)',
-      color: '#a4c2f4',
-      icon: '📄',
-      enabled: true,
-      moveToFolder: true
-    },
-    { 
-      id: 2, 
-      name: 'Interview', 
-      label: 'Interview',
-      description: 'Interview invitations, scheduling, and post-interview follow-ups',
-      color: '#ff7537',
-      icon: '🗓️',
-      enabled: true,
-      moveToFolder: false
-    },
-    { 
-      id: 3, 
-      name: 'Offer', 
-      label: 'Offer',
-      description: 'Job offers and compensation details',
-      color: '#16a765',
-      icon: '💰',
-      enabled: true,
-      moveToFolder: false
-    },
-    { 
-      id: 4, 
-      name: 'Rejected', 
-      label: 'Rejected',
-      description: 'Rejection notifications and "not moving forward" emails',
-      color: '#cccccc',
-      icon: '❌',
-      enabled: true,
-      moveToFolder: true
-    },
-    { 
-      id: 5, 
-      name: 'Ghost', 
-      label: 'Ghost',
-      description: 'Companies that stopped responding after engagement',
-      color: '#a479e2',
-      icon: '👻',
-      enabled: true,
-      moveToFolder: true
-    }
-  ]);
+  const [labels, setLabels] = useState([]);
+  const [labelsLoading, setLabelsLoading] = useState(true);
+  const [labelsError, setLabelsError] = useState(null);
 
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState(null);
-  const [success, setSuccess] = useState(false);
-  const [respectUserLabels, setRespectUserLabels] = useState(true);
+  const [scanResult, setScanResult] = useState(null);
+  const [scanLoading, setScanLoading] = useState(false);
+  const [scanError, setScanError] = useState(null);
 
-  // Load labels from API on component mount
+  const [autoScanStatus, setAutoScanStatus] = useState({ running: false });
+  const [autoScanLoading, setAutoScanLoading] = useState(false);
+  const [autoScanError, setAutoScanError] = useState(null);
+
+  const [authStatus, setAuthStatus] = useState({ authenticated: false, sessionId: null });
+  const [authLoading, setAuthLoading] = useState(false);
+
+  const [query, setQuery] = useState('is:unread');
+  const [maxResults, setMaxResults] = useState(25);
+
   useEffect(() => {
-    fetchLabels();
+    loadAuthStatus();
+    loadLabels();
+    loadAutoScanStatus();
   }, []);
 
-  const fetchLabels = async () => {
+  const loadAuthStatus = async () => {
     try {
-      setLoading(true);
-      const response = await fetch('http://localhost:3000/api/labels');
-      if (response.ok) {
-        const data = await response.json();
-        setCategories(data.map((label, index) => ({
-          id: index + 1,
-          name: label.name,
-          label: label.name,
-          description: label.description,
-          color: label.color?.backgroundColor || '#cccccc',
-          icon: label.icon || '📧',
-          enabled: label.enabled !== false,
-          moveToFolder: label.moveToFolder || false
-        })));
+      setAuthLoading(true);
+      const status = await authApi.checkStatus();
+      setAuthStatus(status);
+      if (status.authenticated && status.sessionId) {
+        localStorage.setItem('session_id', status.sessionId);
       }
-    } catch (err) {
-      console.error('Failed to fetch labels:', err);
-      setError('Failed to load labels');
+      
+    } catch (error) {
+      console.error('Failed to check auth status:', error);
+      setAuthStatus({ authenticated: false, sessionId: null });
     } finally {
-      setLoading(false);
+      setAuthLoading(false);
     }
   };
 
-  const updateLabels = async () => {
+  const loadLabels = async () => {
     try {
-      setLoading(true);
-      setError(null);
-      
-      const response = await fetch('http://localhost:3000/api/labels/update', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({ 
-          labels: categories,
-          respectUserLabels 
-        })
-      });
-      
-      if (response.ok) {
-        setSuccess(true);
-        setTimeout(() => setSuccess(false), 3000);
+      setLabelsLoading(true);
+      const response = await gmailApi.getLabels();
+      if (response.success) {
+        setLabels(response.labels);
+        setLabelsError(null);
       } else {
-        throw new Error('Failed to update labels');
+        setLabelsError(response.error || '读取标签失败');
       }
-    } catch (err) {
-      console.error('Failed to update labels:', err);
-      setError('Failed to save settings');
+    } catch (error) {
+      console.error('Failed to load labels:', error);
+      setLabelsError('读取标签失败');
     } finally {
-      setLoading(false);
+      setLabelsLoading(false);
     }
   };
 
-  const toggleCategory = (id) => {
-    setCategories(categories.map(cat => 
-      cat.id === id ? { ...cat, enabled: !cat.enabled } : cat
-    ));
+  const loadAutoScanStatus = async () => {
+    try {
+      const response = await gmailApi.getAutoScanStatus();
+      if (response.success) {
+        setAutoScanStatus(response);
+        setAutoScanError(null);
+      } else {
+        setAutoScanError(response.error || '读取自动扫描状态失败');
+      }
+    } catch (error) {
+      console.error('Failed to get auto scan status:', error);
+      setAutoScanError('读取自动扫描状态失败');
+    }
   };
 
-  const toggleMoveToFolder = (id) => {
-    setCategories(categories.map(cat => 
-      cat.id === id ? { ...cat, moveToFolder: !cat.moveToFolder } : cat
-    ));
+  const handleLogin = () => {
+    authApi.login();
   };
+
+  const handleLogout = () => {
+    localStorage.removeItem('session_id');
+    setAuthStatus({ authenticated: false, sessionId: null });
+  };
+
+  const handleSetupLabels = async () => {
+    try {
+      setScanLoading(true);
+      const response = await gmailApi.setupLabels();
+      if (!response.success) {
+        throw new Error(response.error || '创建标签失败');
+      }
+      await loadLabels();
+      setScanResult({ message: '已在 Gmail 中创建或更新 JobTrack 标签', results: response.results });
+      setScanError(null);
+    } catch (error) {
+      console.error('Failed to setup labels:', error);
+      setScanError(error.message);
+    } finally {
+      setScanLoading(false);
+    }
+  };
+
+  const handleScanEmails = async () => {
+    try {
+      setScanLoading(true);
+      const response = await gmailApi.scanEmails({ query, maxResults });
+      if (!response.success) {
+        throw new Error(response.error || '扫描失败');
+      }
+      setScanResult(response);
+      setScanError(null);
+    } catch (error) {
+      console.error('Failed to scan emails:', error);
+      setScanError(error.message);
+    } finally {
+      setScanLoading(false);
+    }
+  };
+
+  const handleStartAutoScan = async () => {
+    try {
+      setAutoScanLoading(true);
+      const response = await gmailApi.startAutoScan({ query, maxResults });
+      if (!response.success) {
+        throw new Error(response.error || '启动自动扫描失败');
+      }
+      await loadAutoScanStatus();
+    } catch (error) {
+      console.error('Failed to start auto scan:', error);
+      setAutoScanError(error.message);
+    } finally {
+      setAutoScanLoading(false);
+    }
+  };
+
+  const handleStopAutoScan = async () => {
+    try {
+      setAutoScanLoading(true);
+      const response = await gmailApi.stopAutoScan();
+      if (!response.success) {
+        throw new Error(response.error || '停止自动扫描失败');
+      }
+      await loadAutoScanStatus();
+      setAutoScanError(null);
+    } catch (error) {
+      console.error('Failed to stop auto scan:', error);
+      setAutoScanError(error.message);
+    } finally {
+      setAutoScanLoading(false);
+    }
+  };
+
+  const authBanner = useMemo(() => {
+    if (authLoading) {
+      return (
+        <div className="app-banner info">
+          <LoaderCircle className="spin" size={18} />
+          <span>正在验证登录状态…</span>
+        </div>
+      );
+    }
+
+    if (authStatus.authenticated) {
+      return (
+        <div className="app-banner success">
+          <ShieldCheck size={18} />
+          <span>已连接 Gmail，Session: {authStatus.sessionId}</span>
+          <button className="app-link" onClick={loadAuthStatus}>刷新</button>
+          <button className="app-link" onClick={handleLogout}>清除本地 Session</button>
+        </div>
+      );
+    }
+
+    return (
+      <div className="app-banner warning">
+        <AlertCircle size={18} />
+        <span>尚未完成 Google 登录。</span>
+        <button className="app-link" onClick={handleLogin}>登录 Google</button>
+      </div>
+    );
+  }, [authLoading, authStatus]);
 
   return (
-    <div className="min-h-screen bg-gray-50 flex">
-      {/* Sidebar */}
-      <div className="w-64 bg-white border-r border-gray-200 p-4">
-        <div className="mb-8">
-          <h1 className="text-2xl font-bold text-gray-800">JobTracker</h1>
-          <p className="text-sm text-gray-500 mt-1">Smart Job Search Assistant</p>
+    <div className="app-shell">
+      <aside className="app-sidebar">
+        <div className="app-sidebar__header">
+          <h1>JobTrack</h1>
+          <p className="app-sidebar__subtitle">Gmail 求职标签控制中心</p>
         </div>
 
-        <div className="space-y-1">
-          <div className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-lg cursor-pointer flex items-center gap-3">
-            <Mail size={18} />
-            <span>Inbox</span>
-          </div>
-          <div className="px-4 py-2 bg-indigo-50 text-indigo-600 rounded-lg cursor-pointer flex items-center gap-3 font-medium">
+        <nav className="app-sidebar__nav">
+          <button className="app-sidebar__nav-item active">
             <Settings size={18} />
-            <span>Categorization</span>
-          </div>
-          <div className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-lg cursor-pointer flex items-center gap-3">
-            <Calendar size={18} />
-            <span>Interviews</span>
-          </div>
-          <div className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-lg cursor-pointer flex items-center gap-3">
-            <MessageSquare size={18} />
-            <span>Pending Replies</span>
-          </div>
+            <span>控台总览</span>
+          </button>
+          <button className="app-sidebar__nav-item" onClick={loadLabels}>
+            <Inbox size={18} />
+            <span>标签面板</span>
+          </button>
+          <button className="app-sidebar__nav-item" onClick={loadAutoScanStatus}>
+            <RefreshCcw size={18} />
+            <span>自动扫描</span>
+          </button>
+        </nav>
+
+        <div className="app-sidebar__tip">
+          <p className="app-sidebar__tip-title">⚡ 提示</p>
+          <p>完成 Google 登录后可直接创建 Gmail 标签并开始分类。</p>
         </div>
+      </aside>
 
-        <div className="mt-8 p-4 bg-indigo-50 rounded-lg">
-          <p className="text-sm text-indigo-800 font-medium">💡 Tip</p>
-          <p className="text-xs text-indigo-600 mt-2">
-            Once enabled, the system will automatically add colored labels to your job emails
-          </p>
-        </div>
-      </div>
+      <main className="app-main">
+        {authBanner}
 
-      {/* Main Content */}
-      <div className="flex-1 p-6 overflow-auto bg-gray-50">
-        <div className="max-w-5xl mx-auto">
-          <div className="mb-6">
-            <h2 className="text-2xl font-semibold text-gray-900 mb-2">Email categorization</h2>
-            <p className="text-gray-600">
-              Automatically categorize job-related emails to keep you focused on what's important.
-            </p>
+        <section className="card">
+          <header className="card__header">
+            <div>
+              <h2>Gmail 标签管理</h2>
+              <p>首次使用请先登录并创建 Gmail 标签，再进行扫描。</p>
+            </div>
+            <div className="card__cta-group">
+              <button
+                className="btn primary"
+                onClick={handleSetupLabels}
+                disabled={!authStatus.authenticated || scanLoading}
+              >
+                <Settings size={16} /> 创建 / 更新标签
+              </button>
+              <button
+                className="btn"
+                onClick={loadLabels}
+                disabled={labelsLoading}
+              >
+                <RefreshCcw size={16} /> 刷新列表
+              </button>
+            </div>
+          </header>
+
+          {labelsError && (
+            <div className="card__alert error">
+              <AlertCircle size={16} />
+              <span>{labelsError}</span>
+            </div>
+          )}
+
+          <DashboardView
+            labels={labels}
+            loading={labelsLoading}
+            onRefresh={loadLabels}
+          />
+        </section>
+
+        <section className="card">
+          <header className="card__header">
+            <div>
+              <h2>手动扫描邮箱</h2>
+              <p>从 Gmail 获取最新邮件并根据规则/AI 分类。</p>
+            </div>
+            <div className="card__cta-group">
+              <button
+                className="btn primary"
+                onClick={handleScanEmails}
+                disabled={!authStatus.authenticated || scanLoading}
+              >
+                <LoaderCircle className={scanLoading ? 'spin' : ''} size={16} />
+                {scanLoading ? '扫描中…' : '立即扫描'}
+              </button>
+            </div>
+          </header>
+
+          {!authStatus.authenticated && (
+            <div className="card__alert warning">
+              <AlertCircle size={16} />
+              <span>需要先登录 Google 才能扫描 Gmail。</span>
+            </div>
+          )}
+
+          <div className="form-grid">
+            <label className="form-field">
+              <span>Gmail 搜索语法 (query)</span>
+              <input
+                type="text"
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                placeholder="is:unread label:inbox"
+              />
+            </label>
+            <label className="form-field">
+              <span>最大邮件数量</span>
+              <input
+                type="number"
+                min={1}
+                max={200}
+                value={maxResults}
+                onChange={(e) => setMaxResults(Number(e.target.value) || 1)}
+              />
+            </label>
           </div>
 
-          {/* Status Messages */}
-          {error && (
-            <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-6 flex gap-3">
-              <AlertCircle className="text-red-600 flex-shrink-0 mt-0.5" size={20} />
-              <div className="text-sm text-red-800">
-                <p className="font-medium">{error}</p>
+          {scanError && (
+            <div className="card__alert error">
+              <AlertCircle size={16} />
+              <span>{scanError}</span>
+            </div>
+          )}
+
+          {scanResult && (
+            <div className="scan-result">
+              <header>
+                <h3>扫描结果</h3>
+                <button className="app-link" onClick={handleScanEmails}>
+                  <RefreshCcw size={14} /> 重新扫描
+                </button>
+              </header>
+              <p className="scan-result__summary">
+                总共 {scanResult.stats?.total ?? 0} 封，已分类 {scanResult.stats?.processed ?? 0} 封，跳过 {scanResult.stats?.skipped ?? 0} 封。
+              </p>
+              <div className="scan-result__list">
+                {(scanResult.results || []).map((item) => (
+                  <div key={item.id} className="scan-result__item">
+                    <div className="scan-result__badge">
+                      {item.label ? item.label : 'Skipped'}
+                    </div>
+                    <div className="scan-result__content">
+                      <p className="scan-result__subject">{item.subject || '(无主题)'}</p>
+                      <p className="scan-result__meta">
+                        {item.skipped ? `原因：${item.skipped}` : `置信度：${item.confidence}`}
+                      </p>
+                    </div>
+                  </div>
+                ))}
               </div>
             </div>
           )}
-          
-          {success && (
-            <div className="bg-green-50 border border-green-200 rounded-lg p-4 mb-6 flex gap-3">
-              <div className="w-5 h-5 bg-green-500 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
-                <span className="text-white text-xs">✓</span>
-              </div>
-              <div className="text-sm text-green-800">
-                <p className="font-medium">Settings saved successfully!</p>
-              </div>
+        </section>
+
+        <section className="card">
+          <header className="card__header">
+            <div>
+              <h2>自动扫描</h2>
+              <p>在服务器后台周期性扫描 Gmail 并自动打标签。</p>
             </div>
-          )}
-
-          {/* Info Banner */}
-          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6 flex gap-3">
-            <AlertCircle className="text-blue-600 flex-shrink-0 mt-0.5" size={16} />
-            <div className="text-sm text-blue-800">
-              <p className="mb-1">Turning on a category below will move emails in that category out of your main inbox and into a folder (in Outlook) or label (in Gmail).</p>
-            </div>
-          </div>
-
-          {/* Categories Header */}
-          <div className="mb-4">
-            <div className="grid grid-cols-3 gap-4 text-sm text-gray-600">
-              <div className="text-center">Move to folder/label?</div>
-              <div className="text-center font-medium">Categories</div>
-              <div></div>
-            </div>
-          </div>
-
-          {/* Categories Grid */}
-          <div className="space-y-3 mb-8">
-            {categories.map(category => (
-              <div key={category.id} className="bg-white rounded-lg border border-gray-200 p-4">
-                <div className="grid grid-cols-3 gap-4 items-center">
-                  {/* Toggle Switch */}
-                  <div className="flex justify-center">
-                    <label className="relative inline-flex items-center cursor-pointer">
-                      <input
-                        type="checkbox"
-                        checked={category.enabled}
-                        onChange={() => toggleCategory(category.id)}
-                        className="sr-only peer"
-                      />
-                      <div className="w-11 h-6 bg-gray-200 rounded-full peer peer-focus:ring-4 peer-focus:ring-blue-300 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-0.5 after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
-                    </label>
-                  </div>
-
-                  {/* Category Info */}
-                  <div className="text-center">
-                    <div className="flex items-center justify-center gap-3 mb-2">
-                      <div 
-                        className="px-3 py-1.5 rounded text-sm font-medium flex items-center gap-2 text-black"
-                        style={{ backgroundColor: category.color }}
-                      >
-                        <span>{category.icon}</span>
-                        <span>{category.label}</span>
-                      </div>
-                    </div>
-                    <p className="text-xs text-gray-500">{category.description}</p>
-                  </div>
-
-                  {/* Archive Toggle */}
-                  <div className="flex justify-center">
-                    <div className="text-xs text-gray-500 text-center">
-                      <div className="mb-1">Archive emails</div>
-                      <label className="relative inline-flex items-center cursor-pointer">
-                        <input
-                          type="checkbox"
-                          checked={category.moveToFolder}
-                          onChange={() => toggleMoveToFolder(category.id)}
-                          disabled={!category.enabled}
-                          className="sr-only peer"
-                        />
-                        <div className={`w-9 h-5 bg-gray-200 rounded-full peer peer-focus:ring-2 peer-focus:ring-blue-300 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-0.5 after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-blue-600 ${!category.enabled ? 'opacity-50 cursor-not-allowed' : ''}`}></div>
-                      </label>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-
-          {/* Fyxer email rules section */}
-          <div className="bg-white rounded-lg border border-gray-200 p-6 mb-6">
-            <h3 className="text-lg font-semibold text-gray-900 mb-2">Fyxer email rules</h3>
-            <p className="text-sm text-gray-600 mb-4">
-              Specify email addresses, domains, or specific email subjects to automatically assign to a label. For example, if there's a newsletter you're interested in, you can assign it to FYI so it doesn't go to marketing.
-            </p>
-            <button className="text-sm text-blue-600 hover:text-blue-800 transition-colors">
-              + Add email or subject rule
-            </button>
-          </div>
-
-          {/* Respect user-applied labels */}
-          <div className="bg-white rounded-lg border border-gray-200 p-6 mb-8">
-            <div className="flex items-start justify-between">
-              <div className="flex-1">
-                <h3 className="text-lg font-semibold text-gray-900 mb-2">Respect user-applied labels</h3>
-                <p className="text-sm text-gray-600">
-                  When this is on, we won't re-categorize emails that you or that have been filtered into a folder, though we'll still categorize new emails. When it's off, we'll re-categorize everything based on your current category preferences.
-                </p>
-              </div>
-              <label className="relative inline-flex items-center cursor-pointer ml-6">
-                <input
-                  type="checkbox"
-                  checked={respectUserLabels}
-                  onChange={(e) => setRespectUserLabels(e.target.checked)}
-                  className="sr-only peer"
-                />
-                <div className="w-11 h-6 bg-gray-200 rounded-full peer peer-focus:ring-2 peer-focus:ring-blue-300 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-0.5 after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
-              </label>
-            </div>
-          </div>
-
-          {/* Update Button */}
-          <div className="flex justify-center">
-            <button 
-              onClick={updateLabels}
-              disabled={loading}
-              className="w-full max-w-md bg-blue-600 text-white py-3 px-6 rounded-lg hover:bg-blue-700 transition-colors shadow-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-            >
-              {loading ? (
-                <>
-                  <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                  <span>Updating...</span>
-                </>
+            <div className="card__cta-group">
+              {autoScanStatus.running ? (
+                <button
+                  className="btn danger"
+                  onClick={handleStopAutoScan}
+                  disabled={!authStatus.authenticated || autoScanLoading}
+                >
+                  <PauseCircle size={16} /> 停止自动扫描
+                </button>
               ) : (
-                <span>Update preferences</span>
+                <button
+                  className="btn primary"
+                  onClick={handleStartAutoScan}
+                  disabled={!authStatus.authenticated || autoScanLoading}
+                >
+                  <PlayCircle size={16} /> 启动自动扫描
+                </button>
               )}
-            </button>
-          </div>
-        </div>
-      </div>
+            </div>
+          </header>
+
+          {autoScanError && (
+            <div className="card__alert error">
+              <AlertCircle size={16} />
+              <span>{autoScanError}</span>
+            </div>
+          )}
+
+          <dl className="auto-scan-status">
+            <div>
+              <dt>运行状态</dt>
+              <dd>{autoScanStatus.running ? '运行中' : '已停止'}</dd>
+            </div>
+            <div>
+              <dt>当前查询</dt>
+              <dd>{autoScanStatus.query || query}</dd>
+            </div>
+            <div>
+              <dt>每轮最大邮件数</dt>
+              <dd>{autoScanStatus.maxResults || maxResults}</dd>
+            </div>
+            <div>
+              <dt>扫描间隔</dt>
+              <dd>{autoScanStatus.intervalMs ? `${autoScanStatus.intervalMs / 1000}s` : '60s 默认'}</dd>
+            </div>
+          </dl>
+        </section>
+      </main>
     </div>
   );
 };

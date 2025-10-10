@@ -1,34 +1,13 @@
-import { useState, useEffect } from 'react';
-import { Settings, Toggle, Edit3, Save, X } from 'lucide-react';
+import PropTypes from 'prop-types';
+import { Settings, Edit3, Save, X } from 'lucide-react';
+import { useMemo, useState } from 'react';
 import './Dashboard.css';
 
-const Dashboard = () => {
-  const [labels, setLabels] = useState([]);
-  const [loading, setLoading] = useState(true);
+const Dashboard = ({ labels, loading, onRefresh }) => {
   const [editingLabel, setEditingLabel] = useState(null);
   const [editForm, setEditForm] = useState({});
 
-  useEffect(() => {
-    loadLabels();
-  }, []);
-
-  const loadLabels = async () => {
-    try {
-      setLoading(true);
-      const response = await fetch('/api/labels');
-      const data = await response.json();
-      
-      if (data.success) {
-        setLabels(data.labels);
-      } else {
-        console.error('Failed to load labels:', data.error);
-      }
-    } catch (error) {
-      console.error('Error loading labels:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
+  const stableLabels = useMemo(() => labels || [], [labels]);
 
   const toggleLabel = async (labelId, currentEnabled) => {
     try {
@@ -42,13 +21,9 @@ const Dashboard = () => {
       
       const data = await response.json();
       
-      if (data.success) {
-        setLabels(labels.map(label => 
-          label.id === labelId 
-            ? { ...label, enabled: !currentEnabled }
-            : label
-        ));
-      } else {
+      if (data.success && onRefresh) {
+        onRefresh();
+      } else if (!data.success) {
         console.error('Failed to toggle label:', data.error);
       }
     } catch (error) {
@@ -87,36 +62,16 @@ const Dashboard = () => {
       
       const data = await response.json();
       
-      if (data.success) {
-        // Update local state
-        setLabels(labels.map(label => 
-          label.id === editingLabel
-            ? {
-                ...label,
-                name: editForm.name,
-                description: editForm.description,
-                keywords: editForm.keywords.split(',').map(k => k.trim()).filter(k => k),
-                senders: editForm.senders.split(',').map(s => s.trim()).filter(s => s)
-              }
-            : label
-        ));
+      if (data.success && onRefresh) {
         cancelEditing();
-      } else {
+        onRefresh();
+      } else if (!data.success) {
         console.error('Failed to save label:', data.error);
       }
     } catch (error) {
       console.error('Error saving label:', error);
     }
   };
-
-  if (loading) {
-    return (
-      <div className="dashboard-loading">
-        <div className="loading-spinner"></div>
-        <p>Loading labels...</p>
-      </div>
-    );
-  }
 
   return (
     <div className="dashboard">
@@ -130,8 +85,14 @@ const Dashboard = () => {
         </p>
       </div>
 
-      <div className="labels-grid">
-        {labels.map((label) => (
+      {loading ? (
+        <div className="dashboard-loading">
+          <div className="loading-spinner"></div>
+          <p>Loading labels...</p>
+        </div>
+      ) : (
+        <div className="labels-grid">
+        {stableLabels.map((label) => (
           <div 
             key={label.id} 
             className={`label-card ${label.enabled ? 'enabled' : 'disabled'}`}
@@ -264,8 +225,27 @@ const Dashboard = () => {
           </div>
         ))}
       </div>
+      )}
+
+      <div className="dashboard-footer">
+        <button className="btn btn-refresh" onClick={onRefresh}>
+          <Settings size={16} /> Refresh Labels
+        </button>
+      </div>
     </div>
   );
+};
+
+Dashboard.propTypes = {
+  labels: PropTypes.array,
+  loading: PropTypes.bool,
+  onRefresh: PropTypes.func
+};
+
+Dashboard.defaultProps = {
+  labels: [],
+  loading: false,
+  onRefresh: () => {}
 };
 
 export default Dashboard;

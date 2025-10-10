@@ -45,7 +45,22 @@ export const gmailApi = {
   },
   
   getLabels: async () => {
-    const response = await apiClient.get('/api/gmail/labels');
+    const response = await apiClient.get('/api/labels');
+    return response.data;
+  },
+
+  getAutoScanStatus: async () => {
+    const response = await apiClient.get('/api/gmail/auto-scan/status');
+    return response.data;
+  },
+
+  startAutoScan: async (options = {}) => {
+    const response = await apiClient.post('/api/gmail/auto-scan/start', options);
+    return response.data;
+  },
+
+  stopAutoScan: async () => {
+    const response = await apiClient.post('/api/gmail/auto-scan/stop');
     return response.data;
   }
 };
