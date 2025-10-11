@@ -1,0 +1,48 @@
+/* JobTrack Content Script Styles */
+
+.jobtrack-label {
+  animation: slideIn 0.3s ease-out !important;
+  visibility: visible !important;
+  opacity: 1 !important;
+}
+
+.jobtrack-loading {
+  animation: pulse 1.5s ease-in-out infinite;
+}
+
+.jobtrack-classify-btn:hover {
+  background-color: #3367d6 !important;
+  transform: translateY(-1px);
+  box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+  transition: all 0.2s ease;
+}
+
+.jobtrack-classify-btn:active {
+  transform: translateY(0);
+}
+
+.jobtrack-floating-btn:hover {
+  background-color: #3367d6 !important;
+  transform: scale(1.05);
+  box-shadow: 0 6px 16px rgba(0,0,0,0.25);
+}
+
+@keyframes slideIn {
+  from {
+    opacity: 0;
+    transform: translateX(-20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.7;
+  }
+}

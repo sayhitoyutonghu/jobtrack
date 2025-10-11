@@ -11,7 +11,7 @@ const Dashboard = ({ labels, loading, onRefresh }) => {
 
   const toggleLabel = async (labelId, currentEnabled) => {
     try {
-      const response = await fetch(`/api/labels/${labelId}/toggle`, {
+      const response = await fetch(`http://localhost:3000/api/labels/${labelId}/toggle`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -48,7 +48,7 @@ const Dashboard = ({ labels, loading, onRefresh }) => {
 
   const saveLabel = async () => {
     try {
-      const response = await fetch(`/api/labels/${editingLabel}`, {
+      const response = await fetch(`http://localhost:3000/api/labels/${editingLabel}`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
