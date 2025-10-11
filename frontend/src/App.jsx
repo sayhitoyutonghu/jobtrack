@@ -92,6 +92,25 @@ const JobEmailCategorizationApp = () => {
     authApi.login();
   };
 
+  const handleTestLogin = async () => {
+    try {
+      setAuthLoading(true);
+      const response = await authApi.testLogin();
+      if (response.success && response.sessionId) {
+        localStorage.setItem('session_id', response.sessionId);
+        setAuthStatus({ 
+          authenticated: true, 
+          sessionId: response.sessionId,
+          testMode: true
+        });
+      }
+    } catch (error) {
+      console.error('Test login failed:', error);
+    } finally {
+      setAuthLoading(false);
+    }
+  };
+
   const handleLogout = () => {
     localStorage.removeItem('session_id');
     setAuthStatus({ authenticated: false, sessionId: null });
@@ -182,12 +201,14 @@ const JobEmailCategorizationApp = () => {
             <ShieldCheck size={18} />
           </div>
           <div className="banner-copy">
-            <span className="banner-title">Connected to Gmail</span>
+            <span className="banner-title">
+              {authStatus.testMode ? '🧪 Test Mode Active' : 'Connected to Gmail'}
+            </span>
             <span className="banner-meta">Session ID: {authStatus.sessionId}</span>
           </div>
           <div className="banner-actions">
             <button className="app-link" onClick={loadAuthStatus}>Refresh</button>
-            <button className="app-link" onClick={handleLogout}>Clear Local Session</button>
+            <button className="app-link" onClick={handleLogout}>Logout</button>
           </div>
         </div>
       );
@@ -199,10 +220,11 @@ const JobEmailCategorizationApp = () => {
           <AlertCircle size={18} />
         </div>
         <div className="banner-copy">
-          <span className="banner-title">Google sign-in required</span>
-          <span className="banner-meta">Connect Gmail to enable label automation</span>
+          <span className="banner-title">Authentication required</span>
+          <span className="banner-meta">Sign in with Google or use test mode</span>
         </div>
         <div className="banner-actions">
+          <button className="app-link" onClick={handleTestLogin}>🧪 Test Mode Login</button>
           <button className="app-link" onClick={handleLogin}>Sign in with Google</button>
         </div>
       </div>

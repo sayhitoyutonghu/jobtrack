@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const GmailService = require('../services/gmail.service');
+const MockGmailService = require('../services/mock-gmail.service');
 const ClassifierService = require('../services/classifier.service');
 const { JOB_LABELS } = require('../config/labels');
 const AutoScanService = require('../services/autoscan.service');
@@ -11,6 +12,20 @@ const AutoScanService = require('../services/autoscan.service');
  */
 router.post('/setup', async (req, res) => {
   try {
+    // Check if test mode
+    if (req.user.testMode) {
+      console.log('🧪 [TEST MODE] Using mock Gmail service');
+      const mockService = new MockGmailService();
+      const results = await mockService.setupLabels(JOB_LABELS);
+      
+      return res.json({
+        success: true,
+        message: 'Test mode: Labels simulated successfully',
+        results: results.results,
+        testMode: true
+      });
+    }
+    
     const gmailService = new GmailService(req.user.auth);
     const results = await gmailService.setupAllLabels();
     
@@ -35,6 +50,15 @@ router.post('/setup', async (req, res) => {
 router.post('/scan', async (req, res) => {
   try {
     const { maxResults = 50, query = 'is:unread' } = req.body;
+
+    // Check if test mode
+    if (req.user.testMode) {
+      console.log('🧪 [TEST MODE] Using mock email scan');
+      const mockService = new MockGmailService();
+      const result = await mockService.scanEmails(query, maxResults);
+      
+      return res.json(result);
+    }
 
     const gmailService = new GmailService(req.user.auth);
     const classifier = new ClassifierService(process.env.ANTHROPIC_API_KEY);

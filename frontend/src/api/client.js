@@ -27,6 +27,11 @@ export const authApi = {
     window.location.href = `${API_BASE_URL}/auth/google`;
   },
   
+  testLogin: async () => {
+    const response = await apiClient.post('/auth/test-login');
+    return response.data;
+  },
+  
   checkStatus: async () => {
     const response = await apiClient.get('/auth/status');
     return response.data;
