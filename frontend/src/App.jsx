@@ -63,11 +63,11 @@ const JobEmailCategorizationApp = () => {
         setLabels(response.labels);
         setLabelsError(null);
       } else {
-        setLabelsError(response.error || '读取标签失败');
+        setLabelsError(response.error || 'Unable to load label configuration');
       }
     } catch (error) {
       console.error('Failed to load labels:', error);
-      setLabelsError('读取标签失败');
+      setLabelsError('Unable to load label configuration');
     } finally {
       setLabelsLoading(false);
     }
@@ -80,11 +80,11 @@ const JobEmailCategorizationApp = () => {
         setAutoScanStatus(response);
         setAutoScanError(null);
       } else {
-        setAutoScanError(response.error || '读取自动扫描状态失败');
+        setAutoScanError(response.error || 'Unable to fetch auto-scan status');
       }
     } catch (error) {
       console.error('Failed to get auto scan status:', error);
-      setAutoScanError('读取自动扫描状态失败');
+      setAutoScanError('Unable to fetch auto-scan status');
     }
   };
 
@@ -105,7 +105,7 @@ const JobEmailCategorizationApp = () => {
         throw new Error(response.error || '创建标签失败');
       }
       await loadLabels();
-      setScanResult({ message: '已在 Gmail 中创建或更新 JobTrack 标签', results: response.results });
+      setScanResult({ message: 'Created or updated JobTrack labels in Gmail', results: response.results });
       setScanError(null);
     } catch (error) {
       console.error('Failed to setup labels:', error);
@@ -120,7 +120,7 @@ const JobEmailCategorizationApp = () => {
       setScanLoading(true);
       const response = await gmailApi.scanEmails({ query, maxResults });
       if (!response.success) {
-        throw new Error(response.error || '扫描失败');
+        throw new Error(response.error || 'Scan failed');
       }
       setScanResult(response);
       setScanError(null);
@@ -137,7 +137,7 @@ const JobEmailCategorizationApp = () => {
       setAutoScanLoading(true);
       const response = await gmailApi.startAutoScan({ query, maxResults });
       if (!response.success) {
-        throw new Error(response.error || '启动自动扫描失败');
+        throw new Error(response.error || 'Unable to start auto scan');
       }
       await loadAutoScanStatus();
     } catch (error) {
@@ -153,7 +153,7 @@ const JobEmailCategorizationApp = () => {
       setAutoScanLoading(true);
       const response = await gmailApi.stopAutoScan();
       if (!response.success) {
-        throw new Error(response.error || '停止自动扫描失败');
+        throw new Error(response.error || 'Unable to stop auto scan');
       }
       await loadAutoScanStatus();
       setAutoScanError(null);
@@ -170,7 +170,7 @@ const JobEmailCategorizationApp = () => {
       return (
         <div className="app-banner info">
           <LoaderCircle className="spin" size={18} />
-          <span>正在验证登录状态…</span>
+          <span>Checking Google authentication…</span>
         </div>
       );
     }
@@ -178,19 +178,33 @@ const JobEmailCategorizationApp = () => {
     if (authStatus.authenticated) {
       return (
         <div className="app-banner success">
-          <ShieldCheck size={18} />
-          <span>已连接 Gmail，Session: {authStatus.sessionId}</span>
-          <button className="app-link" onClick={loadAuthStatus}>刷新</button>
-          <button className="app-link" onClick={handleLogout}>清除本地 Session</button>
+          <div className="banner-icon">
+            <ShieldCheck size={18} />
+          </div>
+          <div className="banner-copy">
+            <span className="banner-title">Connected to Gmail</span>
+            <span className="banner-meta">Session ID: {authStatus.sessionId}</span>
+          </div>
+          <div className="banner-actions">
+            <button className="app-link" onClick={loadAuthStatus}>Refresh</button>
+            <button className="app-link" onClick={handleLogout}>Clear Local Session</button>
+          </div>
         </div>
       );
     }
 
     return (
       <div className="app-banner warning">
-        <AlertCircle size={18} />
-        <span>尚未完成 Google 登录。</span>
-        <button className="app-link" onClick={handleLogin}>登录 Google</button>
+        <div className="banner-icon">
+          <AlertCircle size={18} />
+        </div>
+        <div className="banner-copy">
+          <span className="banner-title">Google sign-in required</span>
+          <span className="banner-meta">Connect Gmail to enable label automation</span>
+        </div>
+        <div className="banner-actions">
+          <button className="app-link" onClick={handleLogin}>Sign in with Google</button>
+        </div>
       </div>
     );
   }, [authLoading, authStatus]);
@@ -200,27 +214,27 @@ const JobEmailCategorizationApp = () => {
       <aside className="app-sidebar">
         <div className="app-sidebar__header">
           <h1>JobTrack</h1>
-          <p className="app-sidebar__subtitle">Gmail 求职标签控制中心</p>
+          <p className="app-sidebar__subtitle">Gmail Job Tracking Control Center</p>
         </div>
 
         <nav className="app-sidebar__nav">
           <button className="app-sidebar__nav-item active">
             <Settings size={18} />
-            <span>控台总览</span>
+            <span>Overview</span>
           </button>
           <button className="app-sidebar__nav-item" onClick={loadLabels}>
             <Inbox size={18} />
-            <span>标签面板</span>
+            <span>Label Panel</span>
           </button>
           <button className="app-sidebar__nav-item" onClick={loadAutoScanStatus}>
             <RefreshCcw size={18} />
-            <span>自动扫描</span>
+            <span>Auto Scan</span>
           </button>
         </nav>
 
         <div className="app-sidebar__tip">
-          <p className="app-sidebar__tip-title">⚡ 提示</p>
-          <p>完成 Google 登录后可直接创建 Gmail 标签并开始分类。</p>
+          <p className="app-sidebar__tip-title">⚡ Tip</p>
+          <p>Connect Google to create Gmail labels and start organizing automatically.</p>
         </div>
       </aside>
 
@@ -230,8 +244,8 @@ const JobEmailCategorizationApp = () => {
         <section className="card">
           <header className="card__header">
             <div>
-              <h2>Gmail 标签管理</h2>
-              <p>首次使用请先登录并创建 Gmail 标签，再进行扫描。</p>
+              <h2>Gmail Label Management</h2>
+              <p>Sign in first, then create Gmail labels before running a scan.</p>
             </div>
             <div className="card__cta-group">
               <button
@@ -239,14 +253,14 @@ const JobEmailCategorizationApp = () => {
                 onClick={handleSetupLabels}
                 disabled={!authStatus.authenticated || scanLoading}
               >
-                <Settings size={16} /> 创建 / 更新标签
+                <Settings size={16} /> Create / Update Labels
               </button>
               <button
                 className="btn"
                 onClick={loadLabels}
                 disabled={labelsLoading}
               >
-                <RefreshCcw size={16} /> 刷新列表
+                <RefreshCcw size={16} /> Refresh List
               </button>
             </div>
           </header>
@@ -268,8 +282,8 @@ const JobEmailCategorizationApp = () => {
         <section className="card">
           <header className="card__header">
             <div>
-              <h2>手动扫描邮箱</h2>
-              <p>从 Gmail 获取最新邮件并根据规则/AI 分类。</p>
+              <h2>Manual Email Scan</h2>
+              <p>Fetch the latest Gmail messages and classify them using rules and AI.</p>
             </div>
             <div className="card__cta-group">
               <button
@@ -278,7 +292,7 @@ const JobEmailCategorizationApp = () => {
                 disabled={!authStatus.authenticated || scanLoading}
               >
                 <LoaderCircle className={scanLoading ? 'spin' : ''} size={16} />
-                {scanLoading ? '扫描中…' : '立即扫描'}
+                {scanLoading ? 'Scanning…' : 'Scan Now'}
               </button>
             </div>
           </header>
@@ -286,13 +300,13 @@ const JobEmailCategorizationApp = () => {
           {!authStatus.authenticated && (
             <div className="card__alert warning">
               <AlertCircle size={16} />
-              <span>需要先登录 Google 才能扫描 Gmail。</span>
+              <span>Please sign in with Google before scanning Gmail.</span>
             </div>
           )}
 
           <div className="form-grid">
             <label className="form-field">
-              <span>Gmail 搜索语法 (query)</span>
+              <span>Gmail search query</span>
               <input
                 type="text"
                 value={query}
@@ -301,7 +315,7 @@ const JobEmailCategorizationApp = () => {
               />
             </label>
             <label className="form-field">
-              <span>最大邮件数量</span>
+              <span>Max messages</span>
               <input
                 type="number"
                 min={1}
@@ -322,13 +336,13 @@ const JobEmailCategorizationApp = () => {
           {scanResult && (
             <div className="scan-result">
               <header>
-                <h3>扫描结果</h3>
+                <h3>Scan Results</h3>
                 <button className="app-link" onClick={handleScanEmails}>
-                  <RefreshCcw size={14} /> 重新扫描
+                  <RefreshCcw size={14} /> Run again
                 </button>
               </header>
               <p className="scan-result__summary">
-                总共 {scanResult.stats?.total ?? 0} 封，已分类 {scanResult.stats?.processed ?? 0} 封，跳过 {scanResult.stats?.skipped ?? 0} 封。
+                Total {scanResult.stats?.total ?? 0} · Classified {scanResult.stats?.processed ?? 0} · Skipped {scanResult.stats?.skipped ?? 0}.
               </p>
               <div className="scan-result__list">
                 {(scanResult.results || []).map((item) => (
@@ -337,9 +351,9 @@ const JobEmailCategorizationApp = () => {
                       {item.label ? item.label : 'Skipped'}
                     </div>
                     <div className="scan-result__content">
-                      <p className="scan-result__subject">{item.subject || '(无主题)'}</p>
+                      <p className="scan-result__subject">{item.subject || '(No subject)'}</p>
                       <p className="scan-result__meta">
-                        {item.skipped ? `原因：${item.skipped}` : `置信度：${item.confidence}`}
+                        {item.skipped ? `Reason: ${item.skipped}` : `Confidence: ${item.confidence}`}
                       </p>
                     </div>
                   </div>
@@ -352,8 +366,8 @@ const JobEmailCategorizationApp = () => {
         <section className="card">
           <header className="card__header">
             <div>
-              <h2>自动扫描</h2>
-              <p>在服务器后台周期性扫描 Gmail 并自动打标签。</p>
+              <h2>Automatic Scan</h2>
+              <p>Periodically scan Gmail on the server and tag messages automatically.</p>
             </div>
             <div className="card__cta-group">
               {autoScanStatus.running ? (
@@ -362,7 +376,7 @@ const JobEmailCategorizationApp = () => {
                   onClick={handleStopAutoScan}
                   disabled={!authStatus.authenticated || autoScanLoading}
                 >
-                  <PauseCircle size={16} /> 停止自动扫描
+                  <PauseCircle size={16} /> Stop Auto Scan
                 </button>
               ) : (
                 <button
@@ -370,7 +384,7 @@ const JobEmailCategorizationApp = () => {
                   onClick={handleStartAutoScan}
                   disabled={!authStatus.authenticated || autoScanLoading}
                 >
-                  <PlayCircle size={16} /> 启动自动扫描
+                  <PlayCircle size={16} /> Start Auto Scan
                 </button>
               )}
             </div>
@@ -385,20 +399,20 @@ const JobEmailCategorizationApp = () => {
 
           <dl className="auto-scan-status">
             <div>
-              <dt>运行状态</dt>
-              <dd>{autoScanStatus.running ? '运行中' : '已停止'}</dd>
+              <dt>Status</dt>
+              <dd>{autoScanStatus.running ? 'Running' : 'Stopped'}</dd>
             </div>
             <div>
-              <dt>当前查询</dt>
+              <dt>Current query</dt>
               <dd>{autoScanStatus.query || query}</dd>
             </div>
             <div>
-              <dt>每轮最大邮件数</dt>
+              <dt>Messages per run</dt>
               <dd>{autoScanStatus.maxResults || maxResults}</dd>
             </div>
             <div>
-              <dt>扫描间隔</dt>
-              <dd>{autoScanStatus.intervalMs ? `${autoScanStatus.intervalMs / 1000}s` : '60s 默认'}</dd>
+              <dt>Scan interval</dt>
+              <dd>{autoScanStatus.intervalMs ? `${autoScanStatus.intervalMs / 1000}s` : '60s default'}</dd>
             </div>
           </dl>
         </section>

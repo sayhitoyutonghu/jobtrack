@@ -1,9 +1,10 @@
 .app-shell {
   display: grid;
-  grid-template-columns: 260px 1fr;
+  grid-template-columns: 240px 1fr;
   min-height: 100vh;
-  background: #f3f4f6;
-  color: #111827;
+  background: #f5f7fb;
+  color: #0f172a;
+  font-family: 'Inter', 'SF Pro Display', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
 }
 
 * {
@@ -11,22 +12,24 @@
 }
 
 .app-sidebar {
-  background: #111827;
-  color: #e5e7eb;
+  background: linear-gradient(180deg, #ffffff 0%, #eef2ff 100%);
+  color: #1f2937;
   padding: 2rem 1.5rem;
   display: flex;
   flex-direction: column;
   gap: 2rem;
+  border-right: 1px solid rgba(79, 70, 229, 0.12);
 }
 
 .app-sidebar__header h1 {
-  font-size: 1.8rem;
-  margin-bottom: 0.25rem;
+  font-size: 1.75rem;
+  margin-bottom: 0.35rem;
+  font-weight: 700;
 }
 
 .app-sidebar__subtitle {
-  font-size: 0.95rem;
-  color: #9ca3af;
+  font-size: 0.9rem;
+  color: #64748b;
 }
 
 .app-sidebar__nav {
@@ -43,28 +46,31 @@
   border-radius: 10px;
   background: transparent;
   border: none;
-  color: #d1d5db;
-  font-size: 0.95rem;
+  color: #475569;
+  font-size: 0.92rem;
   cursor: pointer;
-  transition: background 0.2s ease, color 0.2s ease;
+  transition: background 0.2s ease, color 0.2s ease, transform 0.1s ease;
 }
 
 .app-sidebar__nav-item:hover,
 .app-sidebar__nav-item.active {
-  background: rgba(255, 255, 255, 0.08);
-  color: #f9fafb;
+  background: rgba(79, 70, 229, 0.12);
+  color: #4338ca;
+  transform: translateX(4px);
 }
 
 .app-sidebar__tip {
-  background: rgba(255, 255, 255, 0.08);
-  border-radius: 12px;
-  padding: 1rem;
-  color: #e5e7eb;
+  background: rgba(79, 70, 229, 0.12);
+  border-radius: 14px;
+  padding: 1.1rem;
+  color: #312e81;
+  border: 1px solid rgba(79, 70, 229, 0.18);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.45);
 }
 
 .app-sidebar__tip-title {
   font-weight: 600;
-  margin-bottom: 0.35rem;
+  margin-bottom: 0.4rem;
 }
 
 .app-main {
@@ -72,6 +78,7 @@
   display: flex;
   flex-direction: column;
   gap: 1.75rem;
+  background: linear-gradient(135deg, #f8fafc 0%, #eef2ff 55%, #f8fafc 100%);
 }
 
 .app-banner {
@@ -79,8 +86,10 @@
   align-items: center;
   gap: 0.75rem;
   padding: 1rem 1.25rem;
-  border-radius: 12px;
+  border-radius: 14px;
   font-size: 0.95rem;
+  border: 1px solid rgba(99, 102, 241, 0.22);
+  box-shadow: 0 16px 35px -20px rgba(79, 70, 229, 0.4);
 }
 
 .app-banner.info {
@@ -89,13 +98,46 @@
 }
 
 .app-banner.success {
-  background: #ecfdf5;
+  background: linear-gradient(135deg, #ecfdf5 0%, #d1fae5 100%);
   color: #047857;
 }
 
 .app-banner.warning {
-  background: #fef3c7;
+  background: linear-gradient(135deg, #fff7ed 0%, #fde68a 100%);
   color: #92400e;
+}
+
+.banner-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 46px;
+  height: 46px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.55);
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.08);
+}
+
+.banner-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  flex: 1;
+}
+
+.banner-title {
+  font-weight: 600;
+}
+
+.banner-meta {
+  font-size: 0.8rem;
+  opacity: 0.75;
+}
+
+.banner-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
 }
 
 .app-link {
@@ -108,13 +150,22 @@
 }
 
 .card {
-  background: #ffffff;
-  border-radius: 16px;
-  padding: 1.75rem;
-  box-shadow: 0 15px 30px rgba(15, 23, 42, 0.08);
+  background: rgba(255, 255, 255, 0.9);
+  backdrop-filter: blur(16px);
+  border-radius: 18px;
+  padding: 1.85rem;
+  box-shadow: 0 20px 45px -18px rgba(79, 70, 229, 0.28);
+  border: 1px solid rgba(148, 163, 184, 0.2);
   display: flex;
   flex-direction: column;
-  gap: 1.25rem;
+  gap: 1.35rem;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  width: 100%;
+}
+
+.card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 26px 50px -16px rgba(79, 70, 229, 0.35);
 }
 
 .card__header {
@@ -157,10 +208,11 @@
   transform: translateY(-1px);
 }
 
+
 .btn.primary {
-  background: #4f46e5;
+  background: linear-gradient(135deg, #4f46e5 0%, #6366f1 100%);
   color: white;
-  box-shadow: 0 10px 20px rgba(79, 70, 229, 0.25);
+  box-shadow: 0 12px 24px rgba(79, 70, 229, 0.28);
 }
 
 .btn.primary:hover {
@@ -168,9 +220,9 @@
 }
 
 .btn.danger {
-  background: #ef4444;
+  background: linear-gradient(135deg, #f43f5e 0%, #fb7185 100%);
   color: white;
-  box-shadow: 0 10px 20px rgba(239, 68, 68, 0.25);
+  box-shadow: 0 12px 24px rgba(244, 63, 94, 0.28);
 }
 
 .btn:disabled,
