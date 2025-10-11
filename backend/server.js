@@ -1,0 +1,218 @@
+const express = require('express');
+const cors = require('cors');
+const { google } = require('googleapis');
+require('dotenv').config();
+const { saveSession, getSession } = require('./services/session.store');
+
+
+const app = express();
+
+// Middleware
+app.use(cors({
+  origin: process.env.FRONTEND_URL || 'http://localhost:5173',
+  credentials: true
+}));
+app.use(express.json());
+
+// In-memory session storage (kept for fast hot path)
+const sessions = new Map();
+
+// Helper that resolves session from memory or disk
+function resolveSession(sessionId) {
+  let session = sessions.get(sessionId);
+  if (session) return session;
+  // try from disk
+  const stored = getSession(sessionId);
+  if (!stored) return null;
+  // Rebuild structure and cache it in-memory
+  const rebuilt = {
+    auth: stored.auth,
+    tokens: stored.tokens,
+    createdAt: new Date(stored.createdAt),
+  };
+  sessions.set(sessionId, rebuilt);
+  return rebuilt;
+}
+
+// Expose resolver for modules that need to access sessions (e.g., autoscan)
+global.__resolveSession = resolveSession;
+
+// OAuth2 client
+const oauth2Client = new google.auth.OAuth2(
+  process.env.GOOGLE_CLIENT_ID,
+  process.env.GOOGLE_CLIENT_SECRET,
+  process.env.GOOGLE_REDIRECT_URI
+);
+
+// ============================================
+// AUTH ROUTES
+// ============================================
+
+app.get('/auth/google', (req, res) => {
+  const authUrl = oauth2Client.generateAuthUrl({
+    access_type: 'offline',
+    scope: [
+      'https://www.googleapis.com/auth/gmail.modify',
+      'https://www.googleapis.com/auth/gmail.labels'
+    ],
+    prompt: 'consent'
+  });
+  
+  console.log('🔐 Redirecting to Google OAuth...');
+  res.redirect(authUrl);
+});
+
+app.get('/auth/callback', async (req, res) => {
+  const { code, error } = req.query;
+  
+  if (error) {
+    console.error('❌ OAuth error:', error);
+    return res.redirect(`${process.env.FRONTEND_URL}?error=auth_failed`);
+  }
+
+  if (!code) {
+    console.error('❌ No authorization code received');
+    return res.redirect(`${process.env.FRONTEND_URL}?error=no_code`);
+  }
+
+  try {
+    console.log('🔄 Exchanging code for tokens...');
+    const { tokens } = await oauth2Client.getToken(code);
+
+    // Build user client
+    const userAuth = new google.auth.OAuth2(
+      process.env.GOOGLE_CLIENT_ID,
+      process.env.GOOGLE_CLIENT_SECRET,
+      process.env.GOOGLE_REDIRECT_URI
+    );
+    userAuth.setCredentials(tokens);
+
+    // New session id
+    const sessionId = Math.random().toString(36).substring(7);
+
+    // Store in memory
+    sessions.set(sessionId, { auth: userAuth, tokens, createdAt: new Date() });
+    // Persist to disk
+    saveSession(sessionId, tokens);
+
+    console.log('✅ Authentication successful!');
+    console.log(`📝 Session ID: ${sessionId}`);
+    
+    return res.redirect(`${process.env.FRONTEND_URL || 'http://localhost:'+ (process.env.PORT || 3000) + '/auth/success'}?session=${sessionId}`);
+  } catch (error) {
+    console.error('❌ Token exchange failed:', error);
+    return res.redirect(`${process.env.FRONTEND_URL}?error=token_failed`);
+  }
+});
+
+// Backend success page (when no frontend is running)
+app.get('/auth/success', (req, res) => {
+  const { session, error } = req.query;
+  const hasError = Boolean(error);
+  const port = process.env.PORT || 3000;
+  const html = `<!doctype html><html><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width, initial-scale=1"/><title>Auth ${hasError ? 'Failed' : 'Success'}</title><style>body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial;color:#111;line-height:1.5;margin:24px}code,pre{background:#f6f8fa;padding:2px 6px;border-radius:6px}pre{padding:12px;overflow:auto}.wrap{max-width:880px}a.btn{display:inline-block;background:#2563eb;color:#fff;text-decoration:none;padding:8px 12px;border-radius:8px}</style></head><body><div class="wrap"><h1>${hasError ? '❌ Authentication Failed' : '✅ Authentication Successful'}</h1>${hasError ? `<p>Error: ${error}</p>` : ''}${session ? `<p>Session ID: <code>${session}</code></p><h3>Try the APIs</h3><p>Setup labels:</p><pre>curl -X POST http://localhost:${port}/api/gmail/setup \
+  -H "x-session-id: ${session}"</pre><p>Scan emails:</p><pre>curl -X POST http://localhost:${port}/api/gmail/scan \
+  -H "x-session-id: ${session}" \
+  -H "Content-Type: application/json" \
+  -d '{"maxResults": 10}'</pre>` : `<p>No session ID found.</p><p><a class="btn" href="/auth/google">Login with Google</a></p>`}<hr/><p>Configured FRONTEND_URL: <code>${process.env.FRONTEND_URL || ''}</code></p></div></body></html>`;
+  res.set('Content-Type', 'text/html').send(html);
+});
+
+app.get('/auth/status', (req, res) => {
+  const sessionId = req.headers['x-session-id'];
+  const session = resolveSession(sessionId);
+  if (!session) return res.json({ authenticated: false });
+  res.json({ authenticated: true, sessionId, createdAt: session.createdAt });
+});
+
+// ============================================
+// AUTH MIDDLEWARE
+// ============================================
+
+const requireAuth = (req, res, next) => {
+  const sessionId = req.headers['x-session-id'];
+  if (!sessionId) {
+    return res.status(401).json({ 
+      error: 'No session ID provided',
+      message: 'Please authenticate first by visiting /auth/google'
+    });
+  }
+  // Resolve from memory or disk
+  const session = resolveSession(sessionId);
+  if (!session) {
+    return res.status(401).json({ 
+      error: 'Invalid or expired session',
+      message: 'Please re-authenticate by visiting /auth/google'
+    });
+  }
+  req.user = session;
+  next();
+};
+
+// ============================================
+// API ROUTES
+// ============================================
+
+app.use('/api/gmail', requireAuth, require('./routes/gmail.routes'));
+app.use('/api/labels', require('./routes/labels.routes')); // No auth required for reading labels
+
+app.get('/health', (req, res) => {
+  res.json({ 
+    status: 'ok', 
+    timestamp: new Date(),
+    sessions: sessions.size,
+    environment: process.env.NODE_ENV
+  });
+});
+
+app.get('/', (req, res) => {
+  res.json({
+    message: 'JobTrack Gmail Automation API',
+    version: '1.0.0',
+    endpoints: {
+      auth: {
+        login: '/auth/google',
+        status: '/auth/status'
+      },
+      api: {
+        setup: 'POST /api/gmail/setup (requires auth)',
+        scan: 'POST /api/gmail/scan (requires auth)',
+        labels: 'GET /api/gmail/labels (requires auth)'
+      }
+    }
+  });
+});
+
+// ============================================
+// ERROR HANDLING
+// ============================================
+
+app.use((err, req, res, next) => {
+  console.error('Server error:', err);
+  res.status(500).json({
+    error: 'Internal server error',
+    message: err.message
+  });
+});
+
+// ============================================
+// START SERVER
+// ============================================
+
+const PORT = process.env.PORT || 3000;
+
+app.listen(PORT, () => {
+  console.log('\n🚀 JobTrack API Server');
+  console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+  console.log(`📡 Server: http://localhost:${PORT}`);
+  console.log(`🔐 Login:  http://localhost:${PORT}/auth/google`);
+  console.log(`❤️  Health: http://localhost:${PORT}/health`);
+  console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n');
+  
+  if (!process.env.GOOGLE_CLIENT_ID || process.env.GOOGLE_CLIENT_ID === 'your_client_id') {
+    console.warn('⚠️  WARNING: GOOGLE_CLIENT_ID not configured in .env');
+  }
+  if (!process.env.GOOGLE_CLIENT_SECRET) {
+    console.warn('⚠️  WARNING: GOOGLE_CLIENT_SECRET not configured in .env');
+  }
+});
