@@ -1,0 +1,36 @@
+# Python ML Service Dockerfile for JobTrack
+FROM python:3.11-slim
+
+# Set working directory
+WORKDIR /app
+
+# Install system dependencies
+RUN apt-get update && apt-get install -y \
+    gcc \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy requirements
+COPY requirements.txt .
+
+# Install Python dependencies
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Copy Python files
+COPY train_model.py .
+COPY prepare_training_data.py .
+COPY app.py .
+COPY *.pkl ./
+
+# Create directories
+RUN mkdir -p backend/export model_backups
+
+# Expose Flask port
+EXPOSE 5000
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
+  CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:5000/health').read()"
+
+# Start Flask API
+CMD ["python", "app.py"]
+

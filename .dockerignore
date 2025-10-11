@@ -1,0 +1,82 @@
+# Node modules
+node_modules/
+**/node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+ENV/
+*.egg-info/
+dist/
+build/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+*.log
+
+# Git
+.git/
+.gitignore
+
+# Documentation
+*.md
+!README.md
+
+# Development
+.env.local
+.env.development
+.env.test
+.env.production.local
+
+# Build artifacts
+frontend/dist/
+frontend/.vite/
+backend/database/*.db
+
+# Test files
+*.test.js
+*.spec.js
+test/
+tests/
+
+# Temporary files
+*.tmp
+tmp/
+temp/
+
+# Large data files (unless needed)
+*.csv
+!emails.csv
+backend/export/*.csv
+
+# Backup files
+*.bak
+*.backup
+model_backups/*
+!model_backups/.gitkeep
+
+# Legacy
+legacy/
+
+# Scripts (development only)
+*.bat
+*.sh
+*.ps1
+!docker-entrypoint.sh
+

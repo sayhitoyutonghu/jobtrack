@@ -10,6 +10,8 @@ A full-stack application for automatically categorizing job-related emails using
 - **Persistent Storage**: SQLite database for reliable data persistence
 - **RESTful API**: Complete backend API for label management
 - **Responsive Design**: Works on desktop and mobile devices
+- **🆕 Real Gmail Data Training**: Train ML models with your actual Gmail emails for improved accuracy
+- **🆕 Automated Training Pipeline**: One-click scripts to export, prepare, and train models
 
 ## 🏗️ Architecture
 
@@ -195,14 +197,102 @@ curl -X PUT http://localhost:3000/api/labels/1/toggle \
   -d '{"enabled": false}'
 ```
 
+## 🐳 Docker部署
+
+### 快速开始（一键启动）
+
+**Windows:**
+```bash
+docker-start.bat
+```
+
+**Linux/Mac:**
+```bash
+chmod +x docker-start.sh
+./docker-start.sh
+```
+
+### 手动启动
+
+```bash
+# 构建并启动所有服务
+docker compose up -d --build
+
+# 查看状态
+docker compose ps
+
+# 查看日志
+docker compose logs -f
+
+# 停止服务
+docker compose down
+```
+
+### 访问地址
+
+- **前端**: http://localhost
+- **后端API**: http://localhost:3000
+- **Python ML**: http://localhost:5000
+
+### Docker文档
+
+- 📖 [Docker部署快速指南.md](./Docker部署快速指南.md) - 中文快速开始
+- 📖 [DOCKER_GUIDE.md](./DOCKER_GUIDE.md) - 完整Docker指南
+
+---
+
+## 🤖 Machine Learning Training
+
+### Train with Real Gmail Data
+
+JobTrack now supports training ML models with your actual Gmail emails for improved accuracy!
+
+#### Quick Start (One Command)
+
+**Windows:**
+```powershell
+.\train_with_gmail.ps1
+```
+
+**Linux/Mac:**
+```bash
+chmod +x train_with_gmail.sh
+./train_with_gmail.sh
+```
+
+#### Manual Training
+
+```bash
+# 1. Export Gmail data
+$env:JOBTRACK_SESSION_ID='your_session_id'
+node scripts/export-gmail-training-data.js --query "in:inbox" --maxResults 500
+
+# 2. Prepare training data
+python prepare_training_data.py
+
+# 3. Train model
+python train_model.py --data emails_real.csv
+```
+
+#### Documentation
+
+- 📖 [使用真实数据训练_快速开始.md](./使用真实数据训练_快速开始.md) - Quick start guide (Chinese)
+- 📖 [TRAIN_WITH_REAL_GMAIL_DATA.md](./TRAIN_WITH_REAL_GMAIL_DATA.md) - Complete training guide
+- 📖 [QUICK_TRAIN_REFERENCE.md](./QUICK_TRAIN_REFERENCE.md) - Command reference
+- 📖 [TRAINING_SUMMARY.md](./TRAINING_SUMMARY.md) - Current model status
+
+#### Current Performance
+- ✅ **Training Data**: 302 real Gmail emails
+- ✅ **Model Accuracy**: 98.36%
+- 📊 **Categories**: Application, Interview, Offer
+
 ## 🔮 Future Enhancements
 
-- **Google OAuth Integration**: Real Google authentication
-- **Gmail API Integration**: Actual email scanning and labeling
-- **Advanced AI Categorization**: Machine learning for better email classification
+- **Advanced AI Categorization**: More sophisticated ML models
 - **Email Rules Engine**: Custom rules for specific senders/domains
 - **Analytics Dashboard**: Email categorization statistics
 - **Multi-user Support**: User-specific label configurations
+- **Incremental Learning**: Continuous model improvement
 
 ## 📝 License
 
