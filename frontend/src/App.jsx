@@ -33,6 +33,17 @@ const JobEmailCategorizationApp = () => {
   const [maxResults, setMaxResults] = useState(25);
 
   useEffect(() => {
+    // Check if we have a session parameter from OAuth callback
+    const urlParams = new URLSearchParams(window.location.search);
+    const sessionFromUrl = urlParams.get('session');
+    
+    if (sessionFromUrl) {
+      // Save session ID to localStorage
+      localStorage.setItem('session_id', sessionFromUrl);
+      // Clean up URL
+      window.history.replaceState({}, document.title, window.location.pathname);
+    }
+    
     loadAuthStatus();
     loadLabels();
     loadAutoScanStatus();
