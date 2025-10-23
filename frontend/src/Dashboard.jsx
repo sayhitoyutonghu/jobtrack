@@ -1,11 +1,14 @@
 import PropTypes from 'prop-types';
-import { Settings, Edit3, Save, X } from 'lucide-react';
+import { Settings, Edit3, Save, X, PlayCircle, PauseCircle, Clock, Activity, Trash2, AlertTriangle } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import './Dashboard.css';
+import { gmailApi } from './api/client';
 
 const Dashboard = ({ labels, loading, onRefresh }) => {
   const [editingLabel, setEditingLabel] = useState(null);
   const [editForm, setEditForm] = useState({});
+  const [removingLabel, setRemovingLabel] = useState(null);
+  const [deletingLabel, setDeletingLabel] = useState(null);
 
   const stableLabels = useMemo(() => labels || [], [labels]);
 
@@ -73,6 +76,54 @@ const Dashboard = ({ labels, loading, onRefresh }) => {
     }
   };
 
+  const removeLabelFromGmail = async (labelId, labelName) => {
+    if (!window.confirm(`Are you sure you want to remove the "${labelName}" label from all messages in Gmail? This action cannot be undone.`)) {
+      return;
+    }
+
+    setRemovingLabel(labelId);
+    try {
+      const result = await gmailApi.removeLabelFromGmail(labelId, 100);
+      
+      if (result.success) {
+        alert(`Successfully removed "${labelName}" label from ${result.removedCount} messages in Gmail.`);
+        if (onRefresh) onRefresh();
+      } else {
+        alert(`Failed to remove label: ${result.error}`);
+      }
+    } catch (error) {
+      console.error('Error removing label from Gmail:', error);
+      alert(`Error removing label: ${error.message}`);
+    } finally {
+      setRemovingLabel(null);
+    }
+  };
+
+  const deleteLabelFromGmail = async (labelId, labelName) => {
+    const confirmMessage = `⚠️ DANGER: This will permanently delete the "${labelName}" label from Gmail!\n\nThis action:\n• Cannot be undone\n• Will remove the label from ALL messages\n• Will delete the label completely from Gmail\n\nAre you absolutely sure you want to continue?`;
+    
+    if (!window.confirm(confirmMessage)) {
+      return;
+    }
+
+    setDeletingLabel(labelId);
+    try {
+      const result = await gmailApi.deleteLabelFromGmail(labelId);
+      
+      if (result.success) {
+        alert(`✅ Successfully deleted "${labelName}" label from Gmail!`);
+        if (onRefresh) onRefresh();
+      } else {
+        alert(`❌ Failed to delete label: ${result.error}`);
+      }
+    } catch (error) {
+      console.error('Error deleting label from Gmail:', error);
+      alert(`❌ Error deleting label: ${error.message}`);
+    } finally {
+      setDeletingLabel(null);
+    }
+  };
+
   return (
     <div className="dashboard">
       <div className="dashboard-header">
@@ -135,6 +186,30 @@ const Dashboard = ({ labels, loading, onRefresh }) => {
                       className="btn btn-edit"
                     >
                       <Edit3 size={16} />
+                    </button>
+                    <button 
+                      onClick={() => removeLabelFromGmail(label.id, label.name)}
+                      className="btn btn-remove"
+                      disabled={removingLabel === label.id}
+                      title="Remove this label from all messages in Gmail"
+                    >
+                      {removingLabel === label.id ? (
+                        <Activity size={16} className="animate-spin" />
+                      ) : (
+                        <Trash2 size={16} />
+                      )}
+                    </button>
+                    <button 
+                      onClick={() => deleteLabelFromGmail(label.id, label.name)}
+                      className="btn btn-delete"
+                      disabled={deletingLabel === label.id}
+                      title="⚠️ PERMANENTLY DELETE this label from Gmail (cannot be undone!)"
+                    >
+                      {deletingLabel === label.id ? (
+                        <Activity size={16} className="animate-spin" />
+                      ) : (
+                        <AlertTriangle size={16} />
+                      )}
                     </button>
                     <label className="toggle-switch">
                       <input

@@ -1,4 +1,6 @@
 const { JOB_LABELS } = require('../config/labels');
+const fs = require('fs').promises;
+const path = require('path');
 
 class ClassifierService {
   constructor(apiKey) {
@@ -15,6 +17,19 @@ class ClassifierService {
       }
     } else {
       console.log('⚠ AI disabled (no API key provided)');
+    }
+  }
+
+  // 加载label配置以检查enabled状态
+  async loadLabelConfig() {
+    try {
+      const configFile = path.join(__dirname, '../data/label-config.json');
+      const data = await fs.readFile(configFile, 'utf8');
+      const config = JSON.parse(data);
+      return config.labels || {};
+    } catch (error) {
+      console.log('[classifier] Using default label config');
+      return {};
     }
   }
 
@@ -189,18 +204,29 @@ class ClassifierService {
   /**
    * Rule-based classification (fast, no AI cost)
    */
-  classifyByRules(email) {
+  async classifyByRules(email) {
     let subject = (email.subject || '').toLowerCase();
     // Normalize forwarded prefixes
     subject = subject.replace(/^\s*(fwd?|fw):\s*/i, '');
     const text = `${subject} ${email.snippet}`.toLowerCase();
     const from = email.from.toLowerCase();
     
+    // 加载label配置以检查enabled状态
+    const labelConfigs = await this.loadLabelConfig();
+    
     // Check if this is an outbound job application email
     const isOutboundApplication = this.isOutboundJobApplication(email);
     if (isOutboundApplication) {
       const applicationLabel = JOB_LABELS.find(l => l.name === 'Application');
       if (applicationLabel) {
+        // 检查Application label是否enabled
+        const labelId = applicationLabel.name.toLowerCase().replace(/[^a-z0-9]/g, '-');
+        const isEnabled = labelConfigs[labelId]?.enabled !== false; // 默认enabled
+        if (!isEnabled) {
+          console.log(`[classifier] Application label is disabled, skipping`);
+          return null;
+        }
+        
         return {
           label: applicationLabel.name,
           confidence: 'high',
@@ -215,6 +241,14 @@ class ClassifierService {
     if (isLinkedInJobAlert) {
       const applicationLabel = JOB_LABELS.find(l => l.name === 'Application');
       if (applicationLabel) {
+        // 检查Application label是否enabled
+        const labelId = applicationLabel.name.toLowerCase().replace(/[^a-z0-9]/g, '-');
+        const isEnabled = labelConfigs[labelId]?.enabled !== false; // 默认enabled
+        if (!isEnabled) {
+          console.log(`[classifier] Application label is disabled, skipping`);
+          return null;
+        }
+        
         return {
           label: applicationLabel.name,
           confidence: 'high',
@@ -229,6 +263,14 @@ class ClassifierService {
     if (isLinkedInApplicationStatus) {
       const applicationLabel = JOB_LABELS.find(l => l.name === 'Application');
       if (applicationLabel) {
+        // 检查Application label是否enabled
+        const labelId = applicationLabel.name.toLowerCase().replace(/[^a-z0-9]/g, '-');
+        const isEnabled = labelConfigs[labelId]?.enabled !== false; // 默认enabled
+        if (!isEnabled) {
+          console.log(`[classifier] Application label is disabled, skipping`);
+          return null;
+        }
+        
         return {
           label: applicationLabel.name,
           confidence: 'high',
@@ -239,6 +281,14 @@ class ClassifierService {
     }
 
   for (const labelConfig of JOB_LABELS) {
+      // 首先检查label是否enabled
+      const labelId = labelConfig.name.toLowerCase().replace(/[^a-z0-9]/g, '-');
+      const isEnabled = labelConfigs[labelId]?.enabled !== false; // 默认enabled
+      if (!isEnabled) {
+        console.log(`[classifier] Label ${labelConfig.name} is disabled, skipping`);
+        continue; // Skip disabled labels
+      }
+      
       // Check exclude senders first
       if (labelConfig.excludeSenders) {
         const hasExcludeSender = labelConfig.excludeSenders.some(sender => 
@@ -414,7 +464,7 @@ Return ONLY valid JSON:
       return null;
     }
     // Try rules first (free & fast)
-    const ruleResult = this.classifyByRules(email);
+    const ruleResult = await this.classifyByRules(email);
     if (ruleResult) {
       return ruleResult;
     }

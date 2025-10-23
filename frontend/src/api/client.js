@@ -67,6 +67,53 @@ export const gmailApi = {
   stopAutoScan: async () => {
     const response = await apiClient.post('/api/gmail/auto-scan/stop');
     return response.data;
+  },
+
+  runNowAutoScan: async (options = {}) => {
+    const response = await apiClient.post('/api/gmail/auto-scan/run-now', options);
+    return response.data;
+  },
+
+  getAutoScanHistory: async () => {
+    const response = await apiClient.get('/api/gmail/auto-scan/history');
+    return response.data;
+  },
+
+  getAllAutoScanSessions: async () => {
+    const response = await apiClient.get('/api/gmail/auto-scan/sessions');
+    return response.data;
+  },
+
+  // 自动管理器API
+  getAutoManagerStatus: async () => {
+    const response = await apiClient.get('/api/auto-manager/status');
+    return response.data;
+  },
+
+  startAutoManager: async () => {
+    const response = await apiClient.post('/api/auto-manager/start');
+    return response.data;
+  },
+
+  stopAutoManager: async () => {
+    const response = await apiClient.post('/api/auto-manager/stop');
+    return response.data;
+  },
+
+  setAutoStart: async (enabled) => {
+    const response = await apiClient.post(`/api/auto-manager/auto-start/${enabled}`);
+    return response.data;
+  },
+
+  // Labels API
+  removeLabelFromGmail: async (labelId, maxResults = 100) => {
+    const response = await apiClient.post(`/api/labels/${labelId}/remove-from-gmail`, { maxResults });
+    return response.data;
+  },
+
+  deleteLabelFromGmail: async (labelId) => {
+    const response = await apiClient.delete(`/api/labels/${labelId}/delete-from-gmail`);
+    return response.data;
   }
 };
 

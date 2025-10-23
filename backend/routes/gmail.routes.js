@@ -224,6 +224,42 @@ router.get('/auto-scan/status', async (req, res) => {
   res.json({ success: true, ...out });
 });
 
+// 立即执行扫描
+router.post('/auto-scan/run-now', async (req, res) => {
+  try {
+    const { query = 'in:anywhere newer_than:2d', maxResults = 20 } = req.body || {};
+    const sessionId = req.headers['x-session-id'];
+    const result = await autoScan.runNow(sessionId, query, maxResults);
+    res.json({ success: true, ...result });
+  } catch (error) {
+    console.error('run-now error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// 获取扫描历史
+router.get('/auto-scan/history', async (req, res) => {
+  try {
+    const sessionId = req.headers['x-session-id'];
+    const history = autoScan.getHistory(sessionId);
+    res.json({ success: true, history });
+  } catch (error) {
+    console.error('history error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// 获取所有会话状态
+router.get('/auto-scan/sessions', async (req, res) => {
+  try {
+    const sessions = autoScan.getAllSessions();
+    res.json({ success: true, sessions });
+  } catch (error) {
+    console.error('sessions error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
 /**
  * POST /api/gmail/consolidate-interview
  * Moves messages from old Interview sublabels to unified 'Interview' and deletes old labels

@@ -3,6 +3,7 @@ const cors = require('cors');
 const { google } = require('googleapis');
 require('dotenv').config();
 const { saveSession, getSession } = require('./services/session.store');
+const AutoManagerService = require('./services/auto-manager.service');
 
 
 const app = express();
@@ -16,6 +17,9 @@ app.use(express.json());
 
 // In-memory session storage (kept for fast hot path)
 const sessions = new Map();
+
+// 初始化自动管理器
+const autoManager = new AutoManagerService();
 
 // Helper that resolves session from memory or disk
 function resolveSession(sessionId) {
@@ -94,6 +98,9 @@ app.get('/auth/callback', async (req, res) => {
     sessions.set(sessionId, { auth: userAuth, tokens, createdAt: new Date() });
     // Persist to disk
     saveSession(sessionId, tokens);
+    
+    // 自动添加到管理器并启动扫描
+    await autoManager.addSession(sessionId, tokens);
 
     console.log('✅ Authentication successful!');
     console.log(`📝 Session ID: ${sessionId}`);
@@ -149,10 +156,13 @@ app.post('/auth/test-login', (req, res) => {
     testMode: true
   };
   
-  // Store in memory
-  sessions.set(sessionId, mockSession);
-  // Persist to disk
-  saveSession(sessionId, mockSession.tokens);
+    // Store in memory
+    sessions.set(sessionId, mockSession);
+    // Persist to disk
+    saveSession(sessionId, mockSession.tokens);
+    
+    // 测试模式不自动启动扫描
+    console.log('🧪 [TEST MODE] 测试模式不自动启动扫描');
   
   console.log('✅ Test login successful!');
   console.log(`📝 Test Session ID: ${sessionId}`);
@@ -196,6 +206,53 @@ const requireAuth = (req, res, next) => {
 app.use('/api/gmail', requireAuth, require('./routes/gmail.routes'));
 app.use('/api/labels', require('./routes/labels.routes')); // No auth required for reading labels
 
+// 自动管理器API端点
+app.get('/api/auto-manager/status', (req, res) => {
+  try {
+    const status = autoManager.getStatus();
+    const sessions = autoManager.getAllSessionsStatus();
+    res.json({
+      success: true,
+      manager: status,
+      sessions
+    });
+  } catch (error) {
+    console.error('Auto manager status error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+app.post('/api/auto-manager/start', async (req, res) => {
+  try {
+    await autoManager.start();
+    res.json({ success: true, message: 'Auto manager started' });
+  } catch (error) {
+    console.error('Auto manager start error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+app.post('/api/auto-manager/stop', (req, res) => {
+  try {
+    autoManager.stop();
+    res.json({ success: true, message: 'Auto manager stopped' });
+  } catch (error) {
+    console.error('Auto manager stop error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+app.post('/api/auto-manager/auto-start/:enabled', (req, res) => {
+  try {
+    const enabled = req.params.enabled === 'true';
+    autoManager.setAutoStart(enabled);
+    res.json({ success: true, autoStartEnabled: enabled });
+  } catch (error) {
+    console.error('Auto manager set auto-start error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
 app.get('/health', (req, res) => {
   res.json({ 
     status: 'ok', 
@@ -203,6 +260,36 @@ app.get('/health', (req, res) => {
     sessions: sessions.size,
     environment: process.env.NODE_ENV
   });
+});
+
+// 健康检查端点，包含自动扫描状态
+app.get('/health/detailed', (req, res) => {
+  try {
+    const autoScanService = require('./services/autoscan.service');
+    const autoScan = new autoScanService({ intervalMs: 300000, resolveSession: global.__resolveSession });
+    
+    res.json({
+      status: 'ok',
+      timestamp: new Date(),
+      services: {
+        sessions: {
+          count: sessions.size,
+          active: Array.from(sessions.keys())
+        },
+        autoScan: {
+          activeSessions: autoScan.getAllSessions().length,
+          sessions: autoScan.getAllSessions()
+        }
+      },
+      environment: process.env.NODE_ENV
+    });
+  } catch (error) {
+    res.status(500).json({
+      status: 'error',
+      error: error.message,
+      timestamp: new Date()
+    });
+  }
 });
 
 app.get('/', (req, res) => {
@@ -241,7 +328,7 @@ app.use((err, req, res, next) => {
 
 const PORT = process.env.PORT || 3000;
 
-app.listen(PORT, () => {
+app.listen(PORT, async () => {
   console.log('\n🚀 JobTrack API Server');
   console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
   console.log(`📡 Server: http://localhost:${PORT}`);
@@ -254,5 +341,13 @@ app.listen(PORT, () => {
   }
   if (!process.env.GOOGLE_CLIENT_SECRET) {
     console.warn('⚠️  WARNING: GOOGLE_CLIENT_SECRET not configured in .env');
+  }
+  
+  // 启动自动管理器
+  try {
+    await autoManager.start();
+    console.log('🤖 自动管理器已启动 - 用户连接Gmail后将自动开始扫描');
+  } catch (error) {
+    console.error('❌ 自动管理器启动失败:', error.message);
   }
 });

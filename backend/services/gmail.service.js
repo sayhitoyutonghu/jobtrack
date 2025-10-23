@@ -323,6 +323,78 @@ class GmailService {
   }
 
   /**
+   * Remove a label from all messages that have it
+   */
+  async removeLabelFromAllMessages(labelName, maxResults = 100) {
+    const label = await this.findLabel(labelName);
+    if (!label) return { success: false, reason: 'label-not-found' };
+    
+    try {
+      // 获取所有带有该label的消息
+      const messages = await this.listMessagesByLabelId(label.id, maxResults);
+      let removedCount = 0;
+      
+      for (const message of messages) {
+        try {
+          // 获取消息详情以获取threadId
+          const email = await this.getEmail(message.id);
+          await this.gmail.users.threads.modify({
+            userId: 'me',
+            id: email.threadId,
+            requestBody: { removeLabelIds: [label.id] }
+          });
+          removedCount++;
+          await this.sleep(100); // 避免API限制
+        } catch (error) {
+          console.warn(`Failed to remove label from message ${message.id}:`, error.message);
+        }
+      }
+      
+      return { 
+        success: true, 
+        removed: labelName, 
+        count: removedCount,
+        total: messages.length 
+      };
+    } catch (error) {
+      console.error(`Error removing label ${labelName}:`, error);
+      return { success: false, error: error.message };
+    }
+  }
+
+  /**
+   * Delete a label completely from Gmail
+   */
+  async deleteLabel(labelName) {
+    const label = await this.findLabel(labelName);
+    if (!label) return { success: false, reason: 'label-not-found' };
+    
+    try {
+      // 检查是否是系统标签（不能删除）
+      const systemLabels = ['INBOX', 'SENT', 'DRAFT', 'SPAM', 'TRASH', 'STARRED', 'IMPORTANT', 'UNREAD'];
+      if (systemLabels.includes(label.name)) {
+        return { success: false, reason: 'system-label', message: 'Cannot delete system labels' };
+      }
+      
+      // 删除标签
+      await this.gmail.users.labels.delete({
+        userId: 'me',
+        id: label.id
+      });
+      
+      console.log(`✅ Successfully deleted label: ${labelName}`);
+      return { 
+        success: true, 
+        deleted: labelName,
+        labelId: label.id
+      };
+    } catch (error) {
+      console.error(`Error deleting label ${labelName}:`, error);
+      return { success: false, error: error.message };
+    }
+  }
+
+  /**
    * Migrate all messages from one label to another, then delete the old label
    */
   async migrateLabelTo(oldName, newName, maxResults = 500) {

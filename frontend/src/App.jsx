@@ -25,6 +25,9 @@ const JobEmailCategorizationApp = () => {
   const [autoScanStatus, setAutoScanStatus] = useState({ running: false });
   const [autoScanLoading, setAutoScanLoading] = useState(false);
   const [autoScanError, setAutoScanError] = useState(null);
+  const [autoScanHistory, setAutoScanHistory] = useState(null);
+  const [runNowLoading, setRunNowLoading] = useState(false);
+  const [runNowResult, setRunNowResult] = useState(null);
 
   const [authStatus, setAuthStatus] = useState({ authenticated: false, sessionId: null });
   const [authLoading, setAuthLoading] = useState(false);
@@ -47,6 +50,7 @@ const JobEmailCategorizationApp = () => {
     loadAuthStatus();
     loadLabels();
     loadAutoScanStatus();
+    loadAutoScanHistory();
   }, []);
 
   const loadAuthStatus = async () => {
@@ -96,6 +100,17 @@ const JobEmailCategorizationApp = () => {
     } catch (error) {
       console.error('Failed to get auto scan status:', error);
       setAutoScanError('Unable to fetch auto-scan status');
+    }
+  };
+
+  const loadAutoScanHistory = async () => {
+    try {
+      const response = await gmailApi.getAutoScanHistory();
+      if (response.success) {
+        setAutoScanHistory(response.history);
+      }
+    } catch (error) {
+      console.error('Failed to get auto scan history:', error);
     }
   };
 
@@ -192,6 +207,24 @@ const JobEmailCategorizationApp = () => {
       setAutoScanError(error.message);
     } finally {
       setAutoScanLoading(false);
+    }
+  };
+
+  const handleRunNowAutoScan = async () => {
+    try {
+      setRunNowLoading(true);
+      const response = await gmailApi.runNowAutoScan({ query, maxResults });
+      if (!response.success) {
+        throw new Error(response.error || 'Unable to run immediate scan');
+      }
+      setRunNowResult(response);
+      await loadAutoScanHistory();
+      setAutoScanError(null);
+    } catch (error) {
+      console.error('Failed to run immediate scan:', error);
+      setAutoScanError(error.message);
+    } finally {
+      setRunNowLoading(false);
     }
   };
 
@@ -403,6 +436,14 @@ const JobEmailCategorizationApp = () => {
               <p>Periodically scan Gmail on the server and tag messages automatically.</p>
             </div>
             <div className="card__cta-group">
+              <button
+                className="btn"
+                onClick={handleRunNowAutoScan}
+                disabled={!authStatus.authenticated || runNowLoading}
+              >
+                <LoaderCircle className={runNowLoading ? 'spin' : ''} size={16} />
+                {runNowLoading ? 'Running...' : 'Run Now'}
+              </button>
               {autoScanStatus.running ? (
                 <button
                   className="btn danger"
@@ -433,7 +474,9 @@ const JobEmailCategorizationApp = () => {
           <dl className="auto-scan-status">
             <div>
               <dt>Status</dt>
-              <dd>{autoScanStatus.running ? 'Running' : 'Stopped'}</dd>
+              <dd className={autoScanStatus.running ? 'status-running' : 'status-stopped'}>
+                {autoScanStatus.running ? '🟢 Running' : '🔴 Stopped'}
+              </dd>
             </div>
             <div>
               <dt>Current query</dt>
@@ -445,9 +488,66 @@ const JobEmailCategorizationApp = () => {
             </div>
             <div>
               <dt>Scan interval</dt>
-              <dd>{autoScanStatus.intervalMs ? `${autoScanStatus.intervalMs / 1000}s` : '60s default'}</dd>
+              <dd>{autoScanStatus.intervalMs ? `${Math.round(autoScanStatus.intervalMs / 1000 / 60)} minutes` : '5 minutes default'}</dd>
             </div>
+            {autoScanStatus.startTime && (
+              <div>
+                <dt>Started</dt>
+                <dd>{new Date(autoScanStatus.startTime).toLocaleString()}</dd>
+              </div>
+            )}
+            {autoScanStatus.errorCount > 0 && (
+              <div>
+                <dt>Error count</dt>
+                <dd className="status-error">{autoScanStatus.errorCount}/{autoScanStatus.maxRetries}</dd>
+              </div>
+            )}
+            {autoScanStatus.lastScan && (
+              <div>
+                <dt>Last scan</dt>
+                <dd>
+                  {new Date(autoScanStatus.lastScan.timestamp).toLocaleString()} 
+                  ({autoScanStatus.lastScan.processed} processed, {autoScanStatus.lastScan.errors} errors)
+                </dd>
+              </div>
+            )}
           </dl>
+
+          {runNowResult && (
+            <div className="run-now-result">
+              <header>
+                <h3>Immediate Scan Results</h3>
+                <button className="app-link" onClick={() => setRunNowResult(null)}>
+                  <X size={14} /> Clear
+                </button>
+              </header>
+              <p className="run-now-result__summary">
+                Found {runNowResult.messagesFound} messages · Processed {runNowResult.processed}
+              </p>
+              {runNowResult.results && runNowResult.results.length > 0 && (
+                <div className="run-now-result__list">
+                  {runNowResult.results.slice(0, 5).map((item) => (
+                    <div key={item.id} className="run-now-result__item">
+                      <div className="run-now-result__badge">
+                        {item.label}
+                      </div>
+                      <div className="run-now-result__content">
+                        <p className="run-now-result__subject">{item.subject || '(No subject)'}</p>
+                        <p className="run-now-result__meta">
+                          Confidence: {item.confidence}
+                        </p>
+                      </div>
+                    </div>
+                  ))}
+                  {runNowResult.results.length > 5 && (
+                    <p className="run-now-result__more">
+                      ... and {runNowResult.results.length - 5} more
+                    </p>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
         </section>
       </main>
     </div>
