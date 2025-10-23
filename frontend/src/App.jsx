@@ -25,14 +25,17 @@ const JobEmailCategorizationApp = () => {
   const [autoScanStatus, setAutoScanStatus] = useState({ running: false });
   const [autoScanLoading, setAutoScanLoading] = useState(false);
   const [autoScanError, setAutoScanError] = useState(null);
-  const [autoScanHistory, setAutoScanHistory] = useState(null);
+  // autoScanHistory not used in this view
   const [runNowLoading, setRunNowLoading] = useState(false);
   const [runNowResult, setRunNowResult] = useState(null);
 
   const [authStatus, setAuthStatus] = useState({ authenticated: false, sessionId: null });
   const [authLoading, setAuthLoading] = useState(false);
 
+  // query: actual Gmail query string sent to backend
+  // queryOption: which dropdown option is selected ('is:unread'|'in:inbox is:unread'|'in:sent'|'custom')
   const [query, setQuery] = useState('is:unread');
+  const [queryOption, setQueryOption] = useState('is:unread');
   const [maxResults, setMaxResults] = useState(25);
 
   useEffect(() => {
@@ -52,6 +55,33 @@ const JobEmailCategorizationApp = () => {
     loadAutoScanStatus();
     loadAutoScanHistory();
   }, []);
+
+  // Keep dropdown selection in sync with any query value coming from server
+  useEffect(() => {
+    const mapToOption = (q) => {
+      if (!q) return 'is:unread';
+      const lower = q.toLowerCase();
+      // If it mentions inbox, treat as inbox (support variations)
+      if (lower.includes('in:inbox') || lower.includes('label:inbox')) return 'in:inbox is:unread';
+      // If it mentions sent, treat as sent
+      if (lower.includes('in:sent') || lower.includes('label:sent')) return 'in:sent';
+      // If it's or contains is:unread and not other mailbox qualifiers, prefer unread
+      if (lower.includes('is:unread') && !lower.includes('in:') && !lower.includes('label:')) return 'is:unread';
+      // If query equals exactly is:unread
+      if (lower.trim() === 'is:unread') return 'is:unread';
+      return 'custom';
+    };
+
+    // If the server auto-scan status provides a query, prefer that
+    if (autoScanStatus?.query) {
+      setQuery(autoScanStatus.query);
+      setQueryOption(mapToOption(autoScanStatus.query));
+      return;
+    }
+
+    // Otherwise, keep option consistent with local query
+    setQueryOption(mapToOption(query));
+  }, [authStatus.authenticated, autoScanStatus, query]);
 
   const loadAuthStatus = async () => {
     try {
@@ -107,7 +137,7 @@ const JobEmailCategorizationApp = () => {
     try {
       const response = await gmailApi.getAutoScanHistory();
       if (response.success) {
-        setAutoScanHistory(response.history);
+        // history intentionally not stored in this view; kept for backward compatibility
       }
     } catch (error) {
       console.error('Failed to get auto scan history:', error);
@@ -373,12 +403,32 @@ const JobEmailCategorizationApp = () => {
           <div className="form-grid">
             <label className="form-field">
               <span>Gmail search query</span>
-              <input
-                type="text"
-                value={query}
-                onChange={(e) => setQuery(e.target.value)}
-                placeholder="is:unread label:inbox"
-              />
+              <select
+                value={queryOption}
+                onChange={(e) => {
+                  const v = e.target.value;
+                  setQueryOption(v);
+                  if (v === 'custom') {
+                    // start with empty custom query (user can type)
+                    setQuery('');
+                  } else {
+                    setQuery(v);
+                  }
+                }}
+              >
+                <option value="is:unread">Unread (is:unread)</option>
+                <option value="in:inbox is:unread">Inbox (in:inbox is:unread)</option>
+                <option value="in:sent">Sent (in:sent)</option>
+                <option value="custom">Custom...</option>
+              </select>
+              {queryOption === 'custom' && (
+                <input
+                  type="text"
+                  value={query}
+                  onChange={(e) => setQuery(e.target.value)}
+                  placeholder="Enter custom Gmail query"
+                />
+              )}
             </label>
             <label className="form-field">
               <span>Max messages</span>

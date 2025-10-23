@@ -13,7 +13,6 @@ import { gmailApi } from './api/client.js';
 
 const AutoScanDashboard = () => {
   const [autoScanStatus, setAutoScanStatus] = useState({ running: false });
-  const [autoScanHistory, setAutoScanHistory] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [runNowLoading, setRunNowLoading] = useState(false);
@@ -41,7 +40,7 @@ const AutoScanDashboard = () => {
     try {
       const response = await gmailApi.getAutoScanHistory();
       if (response.success) {
-        setAutoScanHistory(response.history);
+        // history not needed in this component currently
       }
     } catch (err) {
       console.error('Failed to get auto scan history:', err);
