@@ -213,6 +213,24 @@
   cursor: not-allowed;
 }
 
+.btn-success {
+  background-color: #10b981;
+  color: white;
+}
+
+.btn-success:hover {
+  background-color: #059669;
+}
+
+.btn-secondary {
+  background-color: #6b7280;
+  color: white;
+}
+
+.btn-secondary:hover {
+  background-color: #4b5563;
+}
+
 .animate-spin {
   animation: spin 1s linear infinite;
 }

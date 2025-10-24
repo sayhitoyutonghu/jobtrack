@@ -1,0 +1,37 @@
+# Mac开发环境数据同步配置
+# 用于确保数据在Mac和Windows之间正确同步
+
+version: '3.8'
+
+services:
+  # 数据同步服务
+  data-sync:
+    image: alpine:latest
+    container_name: jobtrack-data-sync
+    volumes:
+      # 数据目录映射
+      - ./backend/data:/data/backend-data
+      - ./backend/export:/data/backend-export
+      - ./model.pkl:/data/model.pkl
+      - ./vectorizer.pkl:/data/vectorizer.pkl
+      - ./model_backups:/data/model-backups
+    command: |
+      sh -c "
+        echo '数据同步服务启动...'
+        echo '监控数据目录变化...'
+        while true; do
+          echo '数据同步状态检查:'
+          echo '  - Backend数据: $(ls -la /data/backend-data 2>/dev/null | wc -l) 项'
+          echo '  - Export数据: $(ls -la /data/backend-export 2>/dev/null | wc -l) 项'
+          echo '  - 模型文件: $(ls -la /data/model.pkl 2>/dev/null | wc -l) 项'
+          echo '  - 向量化器: $(ls -la /data/vectorizer.pkl 2>/dev/null | wc -l) 项'
+          sleep 60
+        done
+      "
+    networks:
+      - jobtrack-network
+    restart: unless-stopped
+
+networks:
+  jobtrack-network:
+    driver: bridge

@@ -13,6 +13,7 @@ const Dashboard = ({ labels, loading, onRefresh }) => {
   const stableLabels = useMemo(() => labels || [], [labels]);
 
   const toggleLabel = async (labelId, currentEnabled) => {
+    console.log(`[DEBUG] Toggle clicked for ${labelId}, current: ${currentEnabled}`);
     try {
       const response = await fetch(`http://localhost:3000/api/labels/${labelId}/toggle`, {
         method: 'PUT',
@@ -23,9 +24,14 @@ const Dashboard = ({ labels, loading, onRefresh }) => {
       });
       
       const data = await response.json();
+      console.log(`[DEBUG] Toggle response:`, data);
       
       if (data.success && onRefresh) {
-        onRefresh();
+        console.log(`[DEBUG] Calling onRefresh`);
+        // Add a small delay to ensure the backend has processed the change
+        setTimeout(() => {
+          onRefresh();
+        }, 100);
       } else if (!data.success) {
         console.error('Failed to toggle label:', data.error);
       }
@@ -211,14 +217,21 @@ const Dashboard = ({ labels, loading, onRefresh }) => {
                         <AlertTriangle size={16} />
                       )}
                     </button>
-                    <label className="toggle-switch">
-                      <input
-                        type="checkbox"
-                        checked={label.enabled}
-                        onChange={() => toggleLabel(label.id, label.enabled)}
-                      />
-                      <span className="toggle-slider"></span>
-                    </label>
+                    <button 
+                      className={`btn ${label.enabled ? 'btn-success' : 'btn-secondary'}`}
+                      onClick={() => {
+                        console.log(`[DEBUG] Toggle button clicked for ${label.id}, current: ${label.enabled}`);
+                        toggleLabel(label.id, label.enabled);
+                      }}
+                      style={{
+                        minWidth: '60px',
+                        height: '32px',
+                        fontSize: '12px',
+                        fontWeight: 'bold'
+                      }}
+                    >
+                      {label.enabled ? 'ON' : 'OFF'}
+                    </button>
                   </>
                 )}
               </div>

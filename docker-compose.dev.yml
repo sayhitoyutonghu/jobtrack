@@ -1,0 +1,84 @@
+version: '3.8'
+
+services:
+  # Backend Node.js API - 开发模式
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile.backend
+    container_name: jobtrack-backend-dev
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=development
+      - PORT=3000
+      - FRONTEND_URL=http://localhost
+    volumes:
+      # 挂载源代码目录，实现热重载
+      - ./backend:/app
+      - ./backend/data:/app/data
+      - ./backend/export:/app/export
+      - /app/node_modules  # 避免覆盖容器内的node_modules
+    networks:
+      - jobtrack-network
+    restart: unless-stopped
+    command: npm run dev  # 使用开发模式启动
+
+  # Python ML Service - 开发模式
+  python-api:
+    build:
+      context: .
+      dockerfile: Dockerfile.python
+    container_name: jobtrack-python-dev
+    ports:
+      - "5000:5000"
+    environment:
+      - FLASK_ENV=development
+      - FLASK_DEBUG=1
+      - MODEL_PATH=/app/model.pkl
+      - VECTORIZER_PATH=/app/vectorizer.pkl
+    volumes:
+      # 挂载Python源代码，实现热重载
+      - ./app.py:/app/app.py
+      - ./train_model.py:/app/train_model.py
+      - ./prepare_training_data.py:/app/prepare_training_data.py
+      - ./model.pkl:/app/model.pkl
+      - ./vectorizer.pkl:/app/vectorizer.pkl
+      - ./backend/export:/app/backend/export
+      - ./model_backups:/app/model_backups
+    networks:
+      - jobtrack-network
+    restart: unless-stopped
+    depends_on:
+      - backend
+
+  # Frontend React App - 开发模式
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile.frontend.dev
+    container_name: jobtrack-frontend-dev
+    ports:
+      - "80:80"
+      - "5173:5173"  # Vite开发服务器端口
+    environment:
+      - VITE_API_URL=http://localhost:3000
+      - VITE_PYTHON_API_URL=http://localhost:5000
+      - NODE_ENV=development
+    volumes:
+      # 挂载前端源代码，实现热重载
+      - ./frontend:/app
+      - /app/node_modules  # 避免覆盖容器内的node_modules
+    networks:
+      - jobtrack-network
+    restart: unless-stopped
+    command: npm run dev  # 使用开发模式启动
+
+networks:
+  jobtrack-network:
+    driver: bridge
+
+volumes:
+  backend-data:
+  backend-export:
+  model-backups:
