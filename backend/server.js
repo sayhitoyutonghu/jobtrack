@@ -1,3 +1,18 @@
+/**
+ * JobTrack Backend Server
+ * 
+ * A Node.js Express server that provides:
+ * - Google OAuth authentication
+ * - Gmail API integration
+ * - Email classification using ML
+ * - Automated email scanning
+ * - RESTful API endpoints
+ * 
+ * @author JobTrack Team
+ * @version 1.0.0
+ * @since 2024-12-01
+ */
+
 const express = require('express');
 const cors = require('cors');
 const { google } = require('googleapis');
@@ -5,30 +20,49 @@ require('dotenv').config();
 const { saveSession, getSession } = require('./services/session.store');
 const AutoManagerService = require('./services/auto-manager.service');
 
-
+// Initialize Express application
 const app = express();
 
-// Middleware
+// ============================================
+// MIDDLEWARE CONFIGURATION
+// ============================================
+
+// CORS configuration for frontend communication
 app.use(cors({
   origin: process.env.FRONTEND_URL || 'http://localhost:5173',
   credentials: true
 }));
+
+// JSON body parser for API requests
 app.use(express.json());
 
-// In-memory session storage (kept for fast hot path)
+// ============================================
+// SESSION MANAGEMENT
+// ============================================
+
+// In-memory session storage for fast access
+// Sessions are also persisted to disk for reliability
 const sessions = new Map();
 
-// 初始化自动管理器
+// Initialize automated email scanning manager
 const autoManager = new AutoManagerService();
 
-// Helper that resolves session from memory or disk
+/**
+ * Resolves user session from memory or disk storage
+ * 
+ * @param {string} sessionId - Unique session identifier
+ * @returns {Object|null} Session object with auth, tokens, and metadata
+ */
 function resolveSession(sessionId) {
+  // First check in-memory cache for fast access
   let session = sessions.get(sessionId);
   if (session) return session;
-  // try from disk
+  
+  // If not in memory, try to load from disk storage
   const stored = getSession(sessionId);
   if (!stored) return null;
-  // Rebuild structure and cache it in-memory
+  
+  // Rebuild session structure and cache in memory
   const rebuilt = {
     auth: stored.auth,
     tokens: stored.tokens,
@@ -38,7 +72,7 @@ function resolveSession(sessionId) {
   return rebuilt;
 }
 
-// Expose resolver for modules that need to access sessions (e.g., autoscan)
+// Expose session resolver globally for other modules (e.g., autoscan service)
 global.__resolveSession = resolveSession;
 
 // OAuth2 client
