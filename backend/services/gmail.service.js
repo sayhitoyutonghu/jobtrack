@@ -433,37 +433,66 @@ class GmailService {
     });
 
     const message = response.data;
-    const headers = message.payload.headers;
+    const headers = message.payload.headers || [];
 
     const getHeader = (name) => {
-      const header = headers.find(h => 
-        h.name.toLowerCase() === name.toLowerCase()
-      );
+      const header = headers.find(h => h.name.toLowerCase() === name.toLowerCase());
       return header ? header.value : '';
     };
 
-    // Extract body
-    let body = '';
-    if (message.payload.body.data) {
-      body = Buffer.from(message.payload.body.data, 'base64').toString();
-    } else if (message.payload.parts) {
-      const textPart = message.payload.parts.find(p => 
-        p.mimeType === 'text/plain'
-      );
-      if (textPart?.body.data) {
-        body = Buffer.from(textPart.body.data, 'base64').toString();
+    const decodePart = (part) => {
+      if (!part) return '';
+      if (part.body?.data) {
+        return Buffer.from(part.body.data, 'base64').toString();
       }
-    }
+      if (Array.isArray(part.parts)) {
+        return part.parts.map(decodePart).join('\n');
+      }
+      return '';
+    };
+
+    const extractPlainText = (payload) => {
+      if (!payload) return '';
+      if (payload.mimeType === 'text/plain') {
+        return decodePart(payload);
+      }
+
+      if (payload.mimeType === 'text/html') {
+        const html = decodePart(payload);
+        return html.replace(/<style[\s\S]*?<\/style>/gi, '').replace(/<script[\s\S]*?<\/script>/gi, '').replace(/<[^>]+>/g, ' ');
+      }
+
+      if (Array.isArray(payload.parts)) {
+        let text = '';
+        for (const part of payload.parts) {
+          text += extractPlainText(part) + '\n';
+        }
+        return text;
+      }
+
+      return decodePart(payload);
+    };
+
+    const rawBody = extractPlainText(message.payload) || '';
+    const normalizedBody = rawBody
+      .replace(/\u00a0/g, ' ')
+      .replace(/[\r\t]+/g, ' ')
+      .replace(/[ ]{2,}/g, ' ')
+      .replace(/https?:\/\/[\S]+/g, '[link]')
+      .replace(/\s{3,}/g, ' ')
+      .trim();
+    const clippedBody = normalizedBody.substring(0, 20000);
 
     return {
       id: message.id,
       threadId: message.threadId,
-      subject: getHeader('Subject'),
+      subject: getHeader('Subject') || message.payload?.headers?.find(h => h.name === 'subject')?.value || '',
       from: getHeader('From'),
       to: getHeader('To'),
       date: getHeader('Date'),
       snippet: message.snippet,
-      body: body.substring(0, 5000),
+      body: clippedBody,
+      plainBodyLength: normalizedBody.length,
       labelIds: message.labelIds || []
     };
   }

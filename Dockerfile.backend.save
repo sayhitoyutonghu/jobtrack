@@ -1,3 +1,17 @@
+# 修改 Dockerfile.backend 的第 11 行
+sed -i '' 's/npm ci --only=production/npm ci/' Dockerfile.backend
+
+# 验证修改
+cat Dockerfile.backend | grep "npm ci"
+
+# 重建
+docker compose -f docker-compose.dev.yml build --no-cache backend
+
+# 启动
+docker compose -f docker-compose.dev.yml up -d
+
+# 查看日志
+docker logs -f jobtrack-backend-dev
 # Backend Dockerfile for JobTrack
 FROM node:20-alpine
 
@@ -8,7 +22,7 @@ WORKDIR /app
 COPY backend/package*.json ./
 
 # Install dependencies
-RUN npm ci
+RUN npm ci --only=production
 
 # Copy backend source code
 COPY backend/ ./

@@ -78,6 +78,12 @@ router.post('/scan', async (req, res) => {
     for (const message of messages) {
       const email = await gmailService.getEmail(message.id);
       
+      if (!email.body || email.body.length === 0) {
+        results.push({ id: email.id, subject: email.subject, skipped: 'empty-body' });
+        console.log(`↪️  [scan] skipped ${email.id} (empty-body)`);
+        continue;
+      }
+
       // Skip if not job-related
       if (!classifier.isJobRelated(email)) {
         // Give more context: finance/receipt ignored

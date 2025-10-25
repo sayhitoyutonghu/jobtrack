@@ -166,6 +166,13 @@ class AutoScanService {
       for (const m of msgs) {
         try {
           const email = await gmail.getEmail(m.id);
+          if (!email.body || email.body.length === 0) {
+            console.log(`[autoscan] skipped ${m.id} (empty-body)`);
+            continue;
+          }
+          if (!email.body || email.body.length === 0) {
+            continue;
+          }
           if (!classifier.isJobRelated(email)) continue;
           
           const cls = await classifier.classify(email);
