@@ -1,6 +1,7 @@
 import axios from 'axios';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
+export const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID || '';
 
 const apiClient = axios.create({
   baseURL: API_BASE_URL,
@@ -113,6 +114,11 @@ export const gmailApi = {
 
   deleteLabelFromGmail: async (labelId) => {
     const response = await apiClient.delete(`/api/labels/${labelId}/delete-from-gmail`);
+    return response.data;
+  },
+
+  toggleLabel: async (labelId, enabled) => {
+    const response = await apiClient.put(`/api/labels/${labelId}/toggle`, { enabled });
     return response.data;
   }
 };

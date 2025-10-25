@@ -2,21 +2,245 @@ const { JOB_LABELS } = require('../config/labels');
 const fs = require('fs').promises;
 const path = require('path');
 
+const CATEGORY_MAP = {
+  application: 'Application',
+  interview: 'Interview',
+  offer: 'Offer',
+  rejected: 'Rejected',
+  ghost: 'Ghost'
+};
+
+const OPENAI_MODEL = process.env.OPENAI_MODEL || 'gpt-4o-mini';
+const ANTHROPIC_MODEL = process.env.ANTHROPIC_MODEL || 'claude-sonnet-4-5-20250929';
+const OPENAI_TEMPERATURE = Number.isFinite(Number(process.env.OPENAI_TEMPERATURE))
+  ? Number(process.env.OPENAI_TEMPERATURE)
+  : 0;
+
 class ClassifierService {
-  constructor(apiKey) {
-    // AI is optional - we'll use rules first
-    this.useAI = false;
-    if (apiKey && apiKey !== 'sk-ant-your-key-here') {
+  constructor(options = {}) {
+    if (typeof options === 'string') {
+      options = { anthropicApiKey: options };
+    }
+
+    const {
+      openaiApiKey = process.env.OPENAI_API_KEY,
+      anthropicApiKey = process.env.ANTHROPIC_API_KEY,
+      aiMinIntervalMs = process.env.AI_MIN_INTERVAL_MS
+    } = options;
+
+    this.useOpenAI = false;
+    this.useAnthropic = false;
+    const parsedInterval = Number(aiMinIntervalMs);
+    this.aiMinIntervalMs = Number.isFinite(parsedInterval) && parsedInterval > 0 ? parsedInterval : 0;
+    this.lastAIRequestAt = 0;
+
+    if (openaiApiKey) {
+      try {
+        const { OpenAI } = require('openai');
+        this.openai = new OpenAI({ apiKey: openaiApiKey });
+        this.useOpenAI = true;
+        console.log('✓ OpenAI classification enabled');
+      } catch (error) {
+        console.error('⚠ Failed to initialize OpenAI SDK:', error.message);
+      }
+    }
+
+    if (!this.useOpenAI && anthropicApiKey && anthropicApiKey !== 'sk-ant-your-key-here') {
       try {
         const Anthropic = require('@anthropic-ai/sdk');
-        this.anthropic = new Anthropic({ apiKey });
-        this.useAI = true;
-        console.log('✓ AI classification enabled');
+        this.anthropic = new Anthropic({ apiKey: anthropicApiKey });
+        this.useAnthropic = true;
+        console.log('✓ Anthropic classification enabled');
       } catch (error) {
-        console.log('⚠ AI disabled (install @anthropic-ai/sdk to enable)');
+        console.error('⚠ Failed to initialize Anthropic SDK:', error.message);
       }
-    } else {
-      console.log('⚠ AI disabled (no API key provided)');
+    }
+
+    if (!this.useOpenAI && !this.useAnthropic) {
+      console.log('⚠ AI disabled (no valid API key provided)');
+    }
+  }
+
+  buildPrompt(email) {
+    const safe = (value) => (value || '').toString().trim();
+    const body = safe(email.body);
+    const trimmedBody = body.length > 6000 ? `${body.slice(0, 6000)}...` : body;
+
+    return `You are an assistant that classifies job-search related emails into one of five categories. Follow the rules strictly.
+
+Categories:
+- application: 求职申请、投递简历、职位申请状态更新、职位提醒
+- interview: 面试邀请、安排面试、面试跟进
+- offer: 录用通知、offer 细节、入职说明
+- rejected: 拒信、被拒绝通知
+- ghost: 对方长期未回复（30+天无回应）
+- other: 不属于求职相关内容
+
+Instructions:
+1. 基于完整邮件正文做判断。若正文缺失，用主题和摘要推断。
+2. 优先判断是否与求职直接相关；非相关邮件返回 `other`。
+3. 如果明确提到安排/确认面试，分类为 interview。
+4. 如果提到 offer、package、compensation 或入职安排，分类为 offer。
+5. 如果邮件说明申请被拒或未被选中，分类为 rejected。
+6. 如果是申请或申请状态更新（提交、收到、查看），分类为 application。
+7. 如果邮件是自己发出的、在跟进某职位但长期无回复，分类为 ghost。
+8. 如果是介绍/引荐新的招聘联系人或猎头（例如 “let me introduce you to our recruiter”），视为 application。
+9. 如果是通用新闻、营销推广、订阅简报、政治资讯、产品更新（常见特征：包含 unsubscribe/newsletter/manage preferences/© copyright/ marketing images），即使提到 job、career 等字眼也返回 other。
+10. 发现包含明显“unsubscribe”、“preferences”、“newsletter”、“daily update”、“copyright ©” 等字样，优先判断为 other。
+11. 必须只输出一个小写类别名称，且只能是 application/interview/offer/rejected/ghost/other 之一。
+
+Examples:
+- Example 1 → "application":
+  Subject: "Your application was received"
+  Body: "Thank you for applying. Our team will review your resume."
+- Example 2 → "interview":
+  Subject: "Interview availability"
+  Body: "We would like to schedule a technical interview next week." 
+- Example 3 → "offer":
+  Subject: "Offer details"
+  Body: "We are pleased to offer you the position with a starting salary..."
+- Example 4 → "rejected":
+  Subject: "Application update"
+  Body: "We appreciate your interest but will not move forward."
+- Example 5 → "rejected":
+  Subject: "Your application to Graphic Designer"
+  Body: "We’ve decided to move forward with other candidates."
+- Example 6 → "application":
+  Subject: "Intro: You x Recruiter"
+  Body: "Let me introduce you to our recruiter who is hiring for several roles."
+- Example 7 → "other":
+  Subject: "Company News Update"
+  Body: "Here is your weekly newsletter. Unsubscribe anytime."
+- Example 8 → "other":
+  Subject: "Trump to Use $130 Million Anonymous Donation to Help Pay Troops"
+  Body: "A political news update about government shutdown and budget, includes an unsubscribe link."
+
+Email metadata:
+- From: ${safe(email.from)}
+- Subject: ${safe(email.subject)}
+- Snippet: ${safe(email.snippet)}
+- Body:
+${trimmedBody}
+
+Respond with only one label (lowercase).`;
+  }
+
+  parseCategory(rawText) {
+    if (!rawText) return null;
+
+    let text = rawText;
+
+    if (Array.isArray(text)) {
+      text = text.join(' ');
+    }
+
+    text = text.toString().trim();
+
+    try {
+      const parsed = JSON.parse(text);
+      if (typeof parsed === 'string') {
+        text = parsed;
+      } else if (parsed && typeof parsed === 'object' && typeof parsed.category === 'string') {
+        text = parsed.category;
+      }
+    } catch (error) {
+      // ignore JSON parse errors
+    }
+
+    const normalized = text.toLowerCase().trim();
+    if (CATEGORY_MAP[normalized]) {
+      return CATEGORY_MAP[normalized];
+    }
+
+    const normalizedTokens = normalized
+      .replace(/[^a-z]/g, ' ')
+      .split(' ')
+      .filter(Boolean);
+
+    const matchedKey = normalizedTokens.find((token) => CATEGORY_MAP[token]);
+
+    if (!matchedKey) {
+      return null;
+    }
+
+    return CATEGORY_MAP[matchedKey];
+  }
+
+  createAIResult(labelConfig, provider, extras = {}) {
+    if (!labelConfig) return null;
+    return {
+      label: labelConfig.name,
+      confidence: extras.confidence || 'medium',
+      method: `${provider}-ai`,
+      reason: extras.reason || `Classified by ${provider === 'openai' ? 'OpenAI' : 'Anthropic'}`,
+      rawCategory: extras.rawCategory,
+      rawResponse: extras.rawResponse,
+      config: labelConfig
+    };
+  }
+
+  async classifyWithOpenAI(prompt) {
+    if (!this.openai) return null;
+
+    try {
+      const requestPayload = {
+        model: OPENAI_MODEL,
+        temperature: OPENAI_TEMPERATURE,
+        messages: [{ role: 'user', content: prompt }]
+      };
+
+      const response = await this.openai.chat.completions.create(requestPayload);
+
+      const messageContent = response?.choices?.[0]?.message?.content || '';
+      const labelName = this.parseCategory(messageContent);
+      if (!labelName) {
+        console.warn('[classifier][openai] Unable to map category from response:', messageContent);
+        return null;
+      }
+      const labelConfig = JOB_LABELS.find((label) => label.name === labelName);
+      return this.createAIResult(labelConfig, 'openai', {
+        rawCategory: messageContent,
+        rawResponse: { request: requestPayload, response },
+        confidence: response?.choices?.[0]?.confidence || (response?.choices?.[0]?.message?.refusal ? 'low' : 'medium')
+      });
+    } catch (error) {
+      const detail = error?.response?.data || error.message;
+      console.error('OpenAI classification failed:', detail);
+      return null;
+    }
+  }
+
+  async classifyWithAnthropic(prompt) {
+    if (!this.anthropic) return null;
+
+    try {
+      const requestPayload = {
+        model: ANTHROPIC_MODEL,
+        max_tokens: 500,
+        temperature: 0,
+        messages: [{ role: 'user', content: prompt }]
+      };
+
+      const response = await this.anthropic.messages.create(requestPayload);
+
+      const content = Array.isArray(response?.content)
+        ? response.content.map((part) => part.text || '').join(' ')
+        : '';
+
+      const labelName = this.parseCategory(content);
+      if (!labelName) {
+        console.warn('[classifier][anthropic] Unable to map category from response:', content);
+        return null;
+      }
+      const labelConfig = JOB_LABELS.find((label) => label.name === labelName);
+      return this.createAIResult(labelConfig, 'anthropic', {
+        rawCategory: content,
+        rawResponse: { request: requestPayload, response },
+        confidence: response?.usage?.output_tokens ? 'medium' : 'low'
+      });
+    } catch (error) {
+      console.error('Anthropic classification failed:', error.message);
+      return null;
     }
   }
 
@@ -389,66 +613,36 @@ class ClassifierService {
    * AI-based classification (fallback for complex emails)
    */
   async classifyByAI(email) {
-    if (!this.useAI) {
+    if (!this.useOpenAI && !this.useAnthropic) {
       return null;
     }
 
-    const prompt = `Analyze this job search email and categorize it.
-
-Email Details:
-From: ${email.from}
-Subject: ${email.subject}
-Preview: ${email.snippet}
-
-Categories:
-1. Application - Job applications (submitted, status updates, viewed notifications, job alerts)
-2. Interview - Interview invitations, scheduling, and follow-ups
-3. Offer - Job offers and offer letters
-4. Rejected - Rejection emails
-5. Ghost - No response for 30+ days
-6. Not-Job-Related - Not related to job search
-
-Return ONLY valid JSON:
-{
-  "category": "category name",
-  "confidence": "high/medium/low",
-  "reason": "brief explanation"
-}`;
+    const prompt = this.buildPrompt(email);
 
     try {
-      const message = await this.anthropic.messages.create({
-        model: 'claude-sonnet-4-5-20250929',
-        max_tokens: 500,
-        messages: [{ role: 'user', content: prompt }]
-      });
-
-      const result = JSON.parse(message.content[0].text);
-      
-      if (result.category === 'Not-Job-Related') {
-        return null;
+      if (this.useOpenAI) {
+        if (this.aiMinIntervalMs > 0) {
+          const elapsed = Date.now() - this.lastAIRequestAt;
+          const delay = this.aiMinIntervalMs - elapsed;
+          if (delay > 0) {
+            await new Promise((resolve) => setTimeout(resolve, delay));
+          }
+        }
+        const openAIResult = await this.classifyWithOpenAI(prompt);
+        this.lastAIRequestAt = Date.now();
+        if (openAIResult) {
+          return openAIResult;
+        }
       }
 
-      // Map AI classification results to our label names
-      const categoryMapping = {
-        'application': 'Application',
-        'interview': 'Interview', 
-        'offer': 'Offer',
-        'rejected': 'Rejected',
-        'ghost': 'Ghost'
-      };
-      
-      const labelName = categoryMapping[result.category.toLowerCase()];
-      const labelConfig = JOB_LABELS.find(l => l.name === labelName);
+      if (this.useAnthropic) {
+        const anthropicResult = await this.classifyWithAnthropic(prompt);
+        if (anthropicResult) {
+          return anthropicResult;
+        }
+      }
 
-      if (!labelConfig) return null;
-
-      return {
-        label: labelConfig.name,
-        confidence: result.confidence,
-        method: 'ai-classification',
-        reason: result.reason,
-        config: labelConfig
-      };
+      return null;
     } catch (error) {
       console.error('AI classification failed:', error.message);
       return null;
@@ -463,17 +657,15 @@ Return ONLY valid JSON:
     if (this.isFinanceReceipt(email)) {
       return null;
     }
-    // Try rules first (free & fast)
-    const ruleResult = await this.classifyByRules(email);
-    if (ruleResult) {
-      return ruleResult;
+    // Always use AI when available
+    if (this.useOpenAI || this.useAnthropic) {
+      const aiResult = await this.classifyByAI(email);
+      if (aiResult) {
+        return aiResult;
+      }
     }
 
-    // Fallback to AI if available
-    if (this.useAI) {
-      return await this.classifyByAI(email);
-    }
-
+    // If AI is not configured or returns nothing, skip classification
     return null;
   }
 }

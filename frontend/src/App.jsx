@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   Settings,
   AlertCircle,
@@ -33,7 +33,7 @@ const JobEmailCategorizationApp = () => {
   const [authLoading, setAuthLoading] = useState(false);
 
   // query: actual Gmail query string sent to backend
-  // queryOption: which dropdown option is selected ('is:unread'|'in:inbox is:unread'|'in:sent'|'custom')
+  // queryOption: which dropdown option is selected ('is:unread'|'in:inbox'|'in:sent'|'custom')
   const [query, setQuery] = useState('is:unread');
   const [queryOption, setQueryOption] = useState('is:unread');
   const [maxResults, setMaxResults] = useState(25);
@@ -62,7 +62,7 @@ const JobEmailCategorizationApp = () => {
       if (!q) return 'is:unread';
       const lower = q.toLowerCase();
       // If it mentions inbox, treat as inbox (support variations)
-      if (lower.includes('in:inbox') || lower.includes('label:inbox')) return 'in:inbox is:unread';
+      if (lower.includes('in:inbox') || lower.includes('label:inbox')) return 'in:inbox';
       // If it mentions sent, treat as sent
       if (lower.includes('in:sent') || lower.includes('label:sent')) return 'in:sent';
       // If it's or contains is:unread and not other mailbox qualifiers, prefer unread
@@ -108,10 +108,12 @@ const JobEmailCategorizationApp = () => {
         setLabels(response.labels);
         setLabelsError(null);
       } else {
+        setLabels(response.labels || []);
         setLabelsError(response.error || 'Unable to load label configuration');
       }
     } catch (error) {
       console.error('Failed to load labels:', error);
+      setLabels([]);
       setLabelsError('Unable to load label configuration');
     } finally {
       setLabelsLoading(false);
@@ -143,6 +145,21 @@ const JobEmailCategorizationApp = () => {
       console.error('Failed to get auto scan history:', error);
     }
   };
+
+  const handleLabelToggleUpdate = useCallback((labelId, enabled) => {
+    setLabels((prev) =>
+      prev.map((label) =>
+        label.id === labelId ? { ...label, enabled } : label
+      )
+    );
+    setLabelsError(null);
+  }, []);
+
+  useEffect(() => {
+    if (labels.length > 0 && labelsError) {
+      setLabelsError(null);
+    }
+  }, [labels, labelsError]);
 
   const handleLogin = () => {
     authApi.login();
@@ -361,7 +378,7 @@ const JobEmailCategorizationApp = () => {
             </div>
           </header>
 
-          {labelsError && (
+          {labelsError && labels.length === 0 && (
             <div className="card__alert error">
               <AlertCircle size={16} />
               <span>{labelsError}</span>
@@ -372,6 +389,7 @@ const JobEmailCategorizationApp = () => {
             labels={labels}
             loading={labelsLoading}
             onRefresh={loadLabels}
+            onToggleUpdate={handleLabelToggleUpdate}
           />
         </section>
 
@@ -411,13 +429,17 @@ const JobEmailCategorizationApp = () => {
                   if (v === 'custom') {
                     // start with empty custom query (user can type)
                     setQuery('');
+                  } else if (v === 'is:unread') {
+                    setQuery('is:unread');
+                  } else if (v === 'in:inbox') {
+                    setQuery('in:inbox');
                   } else {
                     setQuery(v);
                   }
                 }}
               >
                 <option value="is:unread">Unread (is:unread)</option>
-                <option value="in:inbox is:unread">Inbox (in:inbox is:unread)</option>
+                <option value="in:inbox">Inbox (in:inbox)</option>
                 <option value="in:sent">Sent (in:sent)</option>
                 <option value="custom">Custom...</option>
               </select>

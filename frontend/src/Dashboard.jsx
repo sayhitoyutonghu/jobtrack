@@ -1,42 +1,65 @@
 import PropTypes from 'prop-types';
 import { Settings, Edit3, Save, X, PlayCircle, PauseCircle, Clock, Activity, Trash2, AlertTriangle } from 'lucide-react';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import './Dashboard.css';
 import { gmailApi } from './api/client';
 
-const Dashboard = ({ labels, loading, onRefresh }) => {
+const Dashboard = ({ labels, loading, onRefresh, onToggleUpdate }) => {
   const [editingLabel, setEditingLabel] = useState(null);
   const [editForm, setEditForm] = useState({});
   const [removingLabel, setRemovingLabel] = useState(null);
   const [deletingLabel, setDeletingLabel] = useState(null);
+  const [togglingLabel, setTogglingLabel] = useState(null);
+  const [toggleError, setToggleError] = useState(null);
 
   const stableLabels = useMemo(() => labels || [], [labels]);
+  const [localLabels, setLocalLabels] = useState(stableLabels);
+
+  useEffect(() => {
+    setLocalLabels(stableLabels);
+  }, [stableLabels]);
 
   const toggleLabel = async (labelId, currentEnabled) => {
-    console.log(`[DEBUG] Toggle clicked for ${labelId}, current: ${currentEnabled}`);
+    setTogglingLabel(labelId);
+    setToggleError(null);
+    const nextEnabled = !currentEnabled;
+    const previousLabels = localLabels;
+
+    setLocalLabels((prev) =>
+      prev.map((label) =>
+        label.id === labelId ? { ...label, enabled: nextEnabled } : label
+      )
+    );
+
     try {
-      const response = await fetch(`http://localhost:3000/api/labels/${labelId}/toggle`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ enabled: !currentEnabled })
-      });
-      
-      const data = await response.json();
-      console.log(`[DEBUG] Toggle response:`, data);
-      
-      if (data.success && onRefresh) {
-        console.log(`[DEBUG] Calling onRefresh`);
-        // Add a small delay to ensure the backend has processed the change
-        setTimeout(() => {
-          onRefresh();
-        }, 100);
-      } else if (!data.success) {
-        console.error('Failed to toggle label:', data.error);
+      const response = await gmailApi.toggleLabel(labelId, nextEnabled);
+
+      if (response.success) {
+        const finalEnabled = typeof response.enabled === 'boolean' ? response.enabled : nextEnabled;
+        if (finalEnabled !== nextEnabled) {
+          setLocalLabels((prev) =>
+            prev.map((label) =>
+              label.id === labelId ? { ...label, enabled: finalEnabled } : label
+            )
+          );
+        }
+
+        if (onToggleUpdate) {
+          onToggleUpdate(labelId, finalEnabled);
+        }
+      } else {
+        const error = response.error || 'Failed to toggle label';
+        console.error('Failed to toggle label:', error);
+        setLocalLabels(previousLabels);
+        setToggleError(error);
       }
     } catch (error) {
       console.error('Error toggling label:', error);
+      setLocalLabels(previousLabels);
+      const message = error?.response?.data?.error || error.message || 'Network error while toggling label';
+      setToggleError(message);
+    } finally {
+      setTogglingLabel(null);
     }
   };
 
@@ -142,6 +165,13 @@ const Dashboard = ({ labels, loading, onRefresh }) => {
         </p>
       </div>
 
+      {toggleError && (
+        <div className="dashboard-alert error">
+          <AlertTriangle size={16} />
+          <span>{toggleError}</span>
+        </div>
+      )}
+
       {loading ? (
         <div className="dashboard-loading">
           <div className="loading-spinner"></div>
@@ -149,7 +179,7 @@ const Dashboard = ({ labels, loading, onRefresh }) => {
         </div>
       ) : (
         <div className="labels-grid">
-        {stableLabels.map((label) => (
+        {localLabels.map((label) => (
           <div 
             key={label.id} 
             className={`label-card ${label.enabled ? 'enabled' : 'disabled'}`}
@@ -220,9 +250,9 @@ const Dashboard = ({ labels, loading, onRefresh }) => {
                     <button 
                       className={`btn ${label.enabled ? 'btn-success' : 'btn-secondary'}`}
                       onClick={() => {
-                        console.log(`[DEBUG] Toggle button clicked for ${label.id}, current: ${label.enabled}`);
                         toggleLabel(label.id, label.enabled);
                       }}
+                      disabled={togglingLabel === label.id}
                       style={{
                         minWidth: '60px',
                         height: '32px',
@@ -230,7 +260,9 @@ const Dashboard = ({ labels, loading, onRefresh }) => {
                         fontWeight: 'bold'
                       }}
                     >
-                      {label.enabled ? 'ON' : 'OFF'}
+                      {togglingLabel === label.id
+                        ? '...'
+                        : label.enabled ? 'ON' : 'OFF'}
                     </button>
                   </>
                 )}
@@ -327,13 +359,15 @@ const Dashboard = ({ labels, loading, onRefresh }) => {
 Dashboard.propTypes = {
   labels: PropTypes.array,
   loading: PropTypes.bool,
-  onRefresh: PropTypes.func
+  onRefresh: PropTypes.func,
+  onToggleUpdate: PropTypes.func
 };
 
 Dashboard.defaultProps = {
   labels: [],
   loading: false,
-  onRefresh: () => {}
+  onRefresh: () => {},
+  onToggleUpdate: () => {}
 };
 
 export default Dashboard;

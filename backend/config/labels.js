@@ -25,7 +25,6 @@ const JOB_LABELS = [
     senders: [
       'jobalerts-noreply@linkedin.com',
       'jobs-noreply@linkedin.com',
-      'newsletters-noreply@linkedin.com',
       'linkedin-alerts@linkedin.com',
       'jobsalerts@linkedin.com',
       'indeed.com',
@@ -54,6 +53,12 @@ const JOB_LABELS = [
       'creative specialist', 'senior designer', 'art director', 'junior art director',
       'ui designer', 'ux designer', 'web designer', 'freelance designer',
       'production designer', 'visual designer', 'motion designer',
+
+      // Recruiter intros / referrals
+      'intro you to our recruiter', 'let me introduce you', 'connect you with',
+      'introduction to', 'intro:', 'recruiter intro', 'recruiter introduction',
+      'wanted to introduce you', 'happy to introduce', 'cc our recruiter',
+      'meet the recruiter', 'meet our hiring manager'
       
       // Company and role indicators
       'designer and more', 'designer -', ': designer', 'designer at',
@@ -88,13 +93,15 @@ const JOB_LABELS = [
     excludeKeywords: [
       'connection request', 'would like to connect', 'invitation to connect',
       'connect with', 'sent you a connection', 'i\'d like to connect',
-      'linkedin connection', 'connect on linkedin', 'invitation from'
+      'linkedin connection', 'connect on linkedin', 'invitation from',
+      'unsubscribe', 'newsletter', 'daily briefing'
     ],
     
     // Exclude specific senders (social connections, not job related)
     excludeSenders: [
       'invitations@linkedin.com',
       'member-invitations@linkedin.com',
+      'newsletters-noreply@linkedin.com',
       'mwang73151@aol.com',
       'support@erthwellness.com'
     ]
@@ -148,7 +155,12 @@ const JOB_LABELS = [
       'not moving forward',
       'other candidates',
       'decided to pursue',
-      'not selected'
+      'not selected',
+      'move forward in a different direction',
+      'moving forward with another',
+      'decided to move forward',
+      'decided to move forward with other candidates',
+      'we chose another candidate'
     ]
   },
 

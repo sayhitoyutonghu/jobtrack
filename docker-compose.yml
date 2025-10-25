@@ -7,12 +7,14 @@ services:
       context: .
       dockerfile: Dockerfile.backend
     container_name: jobtrack-backend
+    env_file:
+      - .env
     ports:
       - "3000:3000"
     environment:
       - NODE_ENV=production
       - PORT=3000
-      - FRONTEND_URL=http://localhost
+      - FRONTEND_URL=http://localhost:5173
     volumes:
       - ./backend/data:/app/data
       - ./backend/export:/app/export
@@ -33,7 +35,7 @@ services:
       dockerfile: Dockerfile.python
     container_name: jobtrack-python
     ports:
-      - "5000:5000"
+      - "5001:5000"
     environment:
       - FLASK_ENV=production
       - MODEL_PATH=/app/model.pkl
@@ -59,7 +61,7 @@ services:
       - "80:80"
     environment:
       - VITE_API_URL=http://localhost:3000
-      - VITE_PYTHON_API_URL=http://localhost:5000
+      - VITE_PYTHON_API_URL=http://localhost:5001
     networks:
       - jobtrack-network
     restart: unless-stopped
