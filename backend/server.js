@@ -140,7 +140,7 @@ app.get('/auth/callback', async (req, res) => {
     console.log('✅ Authentication successful!');
     console.log(`📝 Session ID: ${sessionId}`);
     
-    return res.redirect(`${process.env.FRONTEND_URL || 'http://localhost:'+ (process.env.PORT || 3000) + '/auth/success'}?session=${sessionId}`);
+    return res.redirect(`${process.env.FRONTEND_URL}?session=${sessionId}`);
   } catch (error) {
     console.error('❌ Token exchange failed:', error);
     return res.redirect(`${process.env.FRONTEND_URL}?error=token_failed`);
