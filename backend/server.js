@@ -330,11 +330,10 @@ app.use((err, req, res, next) => {
 const PORT = process.env.PORT || 3000;
 
 app.listen(PORT, '0.0.0.0', async () => {
-  console.log('\n🚀 JobTrack API Server');
-  console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-  console.log(`📡 Server: http://0.0.0.0:${PORT}`);
-  console.log(`🔐 Login:  http://0.0.0.0:${PORT}/auth/google`);
-  console.log(`❤️  Health: http://0.0.0.0:${PORT}/health`);
+  console.log('\n✅ JobTrack API Server');
+  console.log(`Server running on port ${PORT}`);
+  console.log(`Login: http://0.0.0.0:${PORT}/auth/google`);
+  console.log(`Health: http://0.0.0.0:${PORT}/health`);
   console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n');
   
   if (!process.env.GOOGLE_CLIENT_ID || process.env.GOOGLE_CLIENT_ID === 'your_client_id') {
