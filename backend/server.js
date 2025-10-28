@@ -10,7 +10,8 @@ const app = express();
 
 // Middleware
 app.use(cors({
-  origin: process.env.FRONTEND_URL || 'http://localhost:5173',
+ origin: [process.env.FRONTEND_URL || 'http://localhost:5173', 'https://jobtrack-7xplmq5l5-sayhitoyutonghu-projects.vercel.app', /\.vercel\.app$/],
+
   credentials: true
 }));
 app.use(express.json());
