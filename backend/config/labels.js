@@ -60,7 +60,7 @@ const JOB_LABELS = [
       'wanted to introduce you', 'happy to introduce', 'cc our recruiter',
       'meet the recruiter', 'meet our hiring manager',
       'designer and more', 'designer -', ': designer', 'designer at',
-      'creative role', 'design role', 'design position', 'creative position',
+      'creative role', 'design role', 'design position', 'creative position',,
       'year salary', 'hour salary', '/year', '/hour', '$', 'salary',
       
       // Application Submitted/Received keywords
