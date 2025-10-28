@@ -53,14 +53,12 @@ const JOB_LABELS = [
       'creative specialist', 'senior designer', 'art director', 'junior art director',
       'ui designer', 'ux designer', 'web designer', 'freelance designer',
       'production designer', 'visual designer', 'motion designer',
-
+      
       // Recruiter intros / referrals
       'intro you to our recruiter', 'let me introduce you', 'connect you with',
       'introduction to', 'intro:', 'recruiter intro', 'recruiter introduction',
       'wanted to introduce you', 'happy to introduce', 'cc our recruiter',
-      'meet the recruiter', 'meet our hiring manager'
-      
-      // Company and role indicators
+      'meet the recruiter', 'meet our hiring manager',
       'designer and more', 'designer -', ': designer', 'designer at',
       'creative role', 'design role', 'design position', 'creative position',
       'year salary', 'hour salary', '/year', '/hour', '$', 'salary',

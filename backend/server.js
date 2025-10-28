@@ -29,7 +29,8 @@ const app = express();
 
 // CORS configuration for frontend communication
 app.use(cors({
-  origin: process.env.FRONTEND_URL || 'http://localhost:5173',
+ origin: [process.env.FRONTEND_URL || 'http://localhost:5173', 'https://jobtrack-7xplmq5l5-sayhitoyutonghu-projects.vercel.app', /\.vercel\.app$/],
+
   credentials: true
 }));
 
@@ -362,12 +363,11 @@ app.use((err, req, res, next) => {
 
 const PORT = process.env.PORT || 3000;
 
-app.listen(PORT, async () => {
-  console.log('\n🚀 JobTrack API Server');
-  console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-  console.log(`📡 Server: http://localhost:${PORT}`);
-  console.log(`🔐 Login:  http://localhost:${PORT}/auth/google`);
-  console.log(`❤️  Health: http://localhost:${PORT}/health`);
+app.listen(PORT, '0.0.0.0', async () => {
+  console.log('\n✅ JobTrack API Server');
+  console.log(`Server running on port ${PORT}`);
+  console.log(`Login: http://0.0.0.0:${PORT}/auth/google`);
+  console.log(`Health: http://0.0.0.0:${PORT}/health`);
   console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n');
   
   if (!process.env.GOOGLE_CLIENT_ID || process.env.GOOGLE_CLIENT_ID === 'your_client_id') {
