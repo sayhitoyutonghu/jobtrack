@@ -374,17 +374,10 @@ const JobEmailCategorizationApp = () => {
             <div className="card__cta-group">
               <button
                 className="btn primary"
-                onClick={handleSetupLabels}
-                disabled={!authStatus.authenticated || scanLoading}
-              >
-                <Settings size={16} /> Create Labels
-              </button>
-              <button
-                className="btn secondary"
                 onClick={() => setShowCreateLabelForm(!showCreateLabelForm)}
                 disabled={!authStatus.authenticated}
               >
-                <Settings size={16} /> Add Custom Label
+                Create New Label
               </button>
               <button
                 className="btn"
@@ -405,7 +398,29 @@ const JobEmailCategorizationApp = () => {
 
           {showCreateLabelForm && (
             <div className="card__form">
-              <h3>Create Custom Label</h3>
+              <h3>Create New Label</h3>
+              
+              <div className="form-actions">
+                <button
+                  className="btn primary"
+                  onClick={handleSetupLabels}
+                  disabled={!authStatus.authenticated || scanLoading}
+                >
+                  {scanLoading ? 'Creating...' : 'Create Preset Labels'}
+                </button>
+                <button
+                  className="btn secondary"
+                  onClick={() => setShowCreateLabelForm(false)}
+                  disabled={scanLoading}
+                >
+                  Cancel
+                </button>
+              </div>
+
+              <div className="form-divider">
+                <span>Or create a custom label:</span>
+              </div>
+
               <div className="form-group">
                 <label htmlFor="labelName">Label Name *</label>
                 <input
@@ -461,14 +476,7 @@ const JobEmailCategorizationApp = () => {
                   onClick={handleCreateCustomLabel}
                   disabled={!newLabel.name.trim() || createLabelLoading}
                 >
-                  {createLabelLoading ? 'Creating...' : 'Create Label'}
-                </button>
-                <button
-                  className="btn"
-                  onClick={() => setShowCreateLabelForm(false)}
-                  disabled={createLabelLoading}
-                >
-                  Cancel
+                  {createLabelLoading ? 'Creating...' : 'Create Custom Label'}
                 </button>
               </div>
             </div>

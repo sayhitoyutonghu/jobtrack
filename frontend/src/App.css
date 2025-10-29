@@ -552,6 +552,55 @@
   margin-top: 1.5rem;
 }
 
+.form-radio-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  margin-top: 0.5rem;
+}
+
+.form-radio {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  cursor: pointer;
+  padding: 0.5rem;
+  border-radius: 6px;
+  transition: background-color 0.2s;
+}
+
+.form-radio:hover {
+  background-color: #f8fafc;
+}
+
+.form-radio input[type="radio"] {
+  width: auto;
+  margin: 0;
+}
+
+.form-radio span {
+  font-size: 0.9rem;
+  color: #374151;
+}
+
+.form-divider {
+  display: flex;
+  align-items: center;
+  margin: 1.5rem 0;
+  text-align: center;
+  color: #6b7280;
+  font-size: 0.9rem;
+}
+
+.form-divider::before,
+.form-divider::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: #e5e7eb;
+  margin: 0 1rem;
+}
+
 .btn.secondary {
   background: #f1f5f9;
   color: #475569;
