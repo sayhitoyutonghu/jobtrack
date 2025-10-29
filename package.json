@@ -1,4 +1,7 @@
 {
+  "scripts": {
+    "start": "cd backend && node server.js"
+  },
   "devDependencies": {
     "prop-types": "^15.8.1"
   },
