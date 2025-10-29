@@ -275,48 +275,33 @@ const JobEmailCategorizationApp = () => {
       setAiError(null);
       setAiAnalysis(null);
       
-      // Try backend analysis, but we'll override with the requested preset autofill
-      let response = null;
-      try {
-        response = await gmailApi.analyzeEmail(emailContent);
-      } catch (e) {
-        // ignore; we will still apply preset autofill below
+      const response = await gmailApi.analyzeEmail(emailContent);
+      if (!response.success) {
+        throw new Error(response.error || 'AI分析失败');
       }
 
-      // Preset autofill requested by user
-      const preset = {
-        labelName: 'Application',
-        description: 'All job application related emails (applied, viewed, job alerts)',
-        keywords: [
-          'job alert',
-          'new jobs',
-          'jobs for you',
-          'application received',
-          'thank you for applying'
-        ],
-        senders: [
-          'jobalerts-noreply@linkedin.com',
-          'jobs-noreply@linkedin.com',
-          'noreply@indeed.com'
-        ],
-        confidence: 0.9,
-        reasoning: 'Preset: generic application-related routing rules'
-      };
+      // 展示后端的分析结果（包含 keywords 与 senders）
+      setAiAnalysis(response.analysis);
 
-      // Show preset as the analysis result for clarity
-      setAiAnalysis(preset);
+      // 根据分析内容动态自动填写名称与描述（优先使用发件方信息）
+      let labelName = response.analysis.labelName || '';
+      if (response.analysis.senderInfo) {
+        const s = response.analysis.senderInfo;
+        if (s.suggestedLabelName) labelName = s.suggestedLabelName;
+        else if (s.companyName) labelName = s.companyName;
+        else if (s.senderName) labelName = s.senderName;
+      }
 
-      // Autofill the create form with preset values
       setNewLabel({
-        name: preset.labelName,
-        description: preset.description,
-        color: '#4a86e8',
-        icon: '📋'
+        name: labelName,
+        description: response.analysis.description || '',
+        color: response.analysis.color || '#4a86e8',
+        icon: response.analysis.icon || '📋'
       });
 
-      // If backend indicated non job-related, surface a soft warning; otherwise ignore
-      if (response && response.success === true && response.isJobRelated === false) {
-        setAiError(`注意: ${response.message || '这封邮件似乎与求职无关，但已填充通用“Application”规则'}`);
+      // 即便不是“求职相关”，也继续填充（仅提示不阻断）
+      if (response.isJobRelated === false) {
+        setAiError(`注意: ${response.message || '这封邮件似乎与求职无关，但已根据内容填入对应规则'}`);
       }
       
     } catch (error) {
