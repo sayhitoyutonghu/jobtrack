@@ -340,17 +340,27 @@ Respond with only one label (lowercase).`;
     const body = (email.body || '').toLowerCase();
     const text = `${subject} ${body}`;
 
+    // Guard: if looks like generic content/guide/newsletter, avoid mapping to Offer unless strong signals
+    const looksGenericContent = /\b(how to|guide|newsletter|daily update|tips|blog)\b/.test(subject);
+
     const phraseRules = [
       { pattern: /(application (was )?received|thank you for applying|we received your application)/, category: 'application' },
       { pattern: /(application was viewed|viewed your application|application reviewed)/, category: 'application' },
       { pattern: /(job alert|jobs for you|now hiring|hiring in )/, category: 'application' },
+      // Job discovery alerts
+      { pattern: /(we found \d+ jobs|we found jobs|found \d+ jobs|\bnew jobs? in\b|\bjobs? in\b|alert: .*\bjobs?\b)/, category: 'application' },
       { pattern: /(interview|schedule d?an interview|availability for interview|invite(d)? you to interview)/, category: 'interview' },
-      { pattern: /(offer|compensation|package|onboarding)/, category: 'offer' },
+      // Offer: require stronger patterns to avoid generic "special offer" matches
+      { pattern: /(job offer|offer letter|offer details|accept (the )?offer|start date|compensation|onboarding)/, category: 'offer' },
       { pattern: /(reject|not move forward|no longer moving forward|decline your application)/, category: 'rejected' }
     ];
 
     for (const rule of phraseRules) {
       if (rule.pattern.test(text)) {
+        if (rule.category === 'offer' && looksGenericContent) {
+          // Skip weak offer when subject looks like generic content
+          continue;
+        }
         return this.createResult(rule.category, 'high', 'rule-phrase');
       }
     }
