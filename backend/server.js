@@ -106,12 +106,12 @@ app.get('/auth/callback', async (req, res) => {
   
   if (error) {
     console.error('❌ OAuth error:', error);
-    return res.redirect(`${process.env.FRONTEND_URL}?error=auth_failed`);
+    return res.redirect('https://jobtrack-zeta.vercel.app?error=auth_failed');
   }
 
   if (!code) {
     console.error('❌ No authorization code received');
-    return res.redirect(`${process.env.FRONTEND_URL}?error=no_code`);
+    return res.redirect('https://jobtrack-zeta.vercel.app?error=no_code');
   }
 
   try {
@@ -140,10 +140,10 @@ app.get('/auth/callback', async (req, res) => {
     console.log('✅ Authentication successful!');
     console.log(`📝 Session ID: ${sessionId}`);
     
-    return res.redirect(`${process.env.FRONTEND_URL}?session=${sessionId}`);
+    return res.redirect('https://jobtrack-zeta.vercel.app?session=' + sessionId);
   } catch (error) {
     console.error('❌ Token exchange failed:', error);
-    return res.redirect(`${process.env.FRONTEND_URL}?error=token_failed`);
+    return res.redirect('https://jobtrack-zeta.vercel.app?error=token_failed');
   }
 });
 
