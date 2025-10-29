@@ -21,11 +21,12 @@ async function testAutoScan() {
     console.log(`   Sessions: ${healthResponse.data.services.sessions.count}`);
     console.log(`   Auto-scan sessions: ${healthResponse.data.services.autoScan.activeSessions}`);
 
-    // 2. 测试登录（测试模式）
-    console.log('\n2. Testing test mode login...');
-    const loginResponse = await axios.post(`${API_BASE}/auth/test-login`);
-    const sessionId = loginResponse.data.sessionId;
-    console.log(`✅ Test login successful: ${sessionId}`);
+    // 2. 需要手动Google OAuth认证
+    console.log('\n2. Manual Google OAuth required...');
+    console.log('⚠️  Please visit: http://localhost:3000/auth/google');
+    console.log('   After authentication, provide the session ID to continue');
+    console.log('❌ Test login not available (test mode removed)');
+    return;
 
     // 3. 测试自动扫描状态
     console.log('\n3. Checking auto-scan status...');

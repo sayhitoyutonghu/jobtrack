@@ -32,6 +32,12 @@ const JobEmailCategorizationApp = () => {
   const [authStatus, setAuthStatus] = useState({ authenticated: false, sessionId: null });
   const [authLoading, setAuthLoading] = useState(false);
 
+  // Custom label creation state
+  const [showCreateLabelForm, setShowCreateLabelForm] = useState(false);
+  const [newLabel, setNewLabel] = useState({ name: '', description: '', color: '#4a86e8', icon: '📋' });
+  const [createLabelLoading, setCreateLabelLoading] = useState(false);
+  const [createLabelError, setCreateLabelError] = useState(null);
+
   // query: actual Gmail query string sent to backend
   // queryOption: which dropdown option is selected ('is:unread'|'in:inbox'|'in:sent'|'custom')
   const [query, setQuery] = useState('is:unread');
@@ -165,24 +171,6 @@ const JobEmailCategorizationApp = () => {
     authApi.login();
   };
 
-  const handleTestLogin = async () => {
-    try {
-      setAuthLoading(true);
-      const response = await authApi.testLogin();
-      if (response.success && response.sessionId) {
-        localStorage.setItem('session_id', response.sessionId);
-        setAuthStatus({ 
-          authenticated: true, 
-          sessionId: response.sessionId,
-          testMode: true
-        });
-      }
-    } catch (error) {
-      console.error('Test login failed:', error);
-    } finally {
-      setAuthLoading(false);
-    }
-  };
 
   const handleLogout = () => {
     localStorage.removeItem('session_id');
@@ -204,6 +192,32 @@ const JobEmailCategorizationApp = () => {
       setScanError(error.message);
     } finally {
       setScanLoading(false);
+    }
+  };
+
+  const handleCreateCustomLabel = async () => {
+    try {
+      setCreateLabelLoading(true);
+      setCreateLabelError(null);
+      
+      const response = await gmailApi.createLabel(newLabel);
+      if (!response.success) {
+        throw new Error(response.error || '创建自定义标签失败');
+      }
+      
+      // Reset form and hide it
+      setNewLabel({ name: '', description: '', color: '#4a86e8', icon: '📋' });
+      setShowCreateLabelForm(false);
+      
+      // Refresh labels list
+      await loadLabels();
+      
+      setScanResult({ message: `Custom label "${newLabel.name}" created successfully` });
+    } catch (error) {
+      console.error('Failed to create custom label:', error);
+      setCreateLabelError(error.message);
+    } finally {
+      setCreateLabelLoading(false);
     }
   };
 
@@ -291,12 +305,10 @@ const JobEmailCategorizationApp = () => {
           <div className="banner-icon">
             <ShieldCheck size={18} />
           </div>
-          <div className="banner-copy">
-            <span className="banner-title">
-              {authStatus.testMode ? '🧪 Test Mode Active' : 'Connected to Gmail'}
-            </span>
-            <span className="banner-meta">Session ID: {authStatus.sessionId}</span>
-          </div>
+        <div className="banner-copy">
+          <span className="banner-title">Connected to Gmail</span>
+          <span className="banner-meta">Session ID: {authStatus.sessionId}</span>
+        </div>
           <div className="banner-actions">
             <button className="app-link" onClick={loadAuthStatus}>Refresh</button>
             <button className="app-link" onClick={handleLogout}>Logout</button>
@@ -312,10 +324,9 @@ const JobEmailCategorizationApp = () => {
         </div>
         <div className="banner-copy">
           <span className="banner-title">Authentication required</span>
-          <span className="banner-meta">Sign in with Google or use test mode</span>
+          <span className="banner-meta">Sign in with Google to access Gmail features</span>
         </div>
         <div className="banner-actions">
-          <button className="app-link" onClick={handleTestLogin}>🧪 Test Mode Login</button>
           <button className="app-link" onClick={handleLogin}>Sign in with Google</button>
         </div>
       </div>
@@ -366,7 +377,14 @@ const JobEmailCategorizationApp = () => {
                 onClick={handleSetupLabels}
                 disabled={!authStatus.authenticated || scanLoading}
               >
-                <Settings size={16} /> Create / Update Labels
+                <Settings size={16} /> Create Labels
+              </button>
+              <button
+                className="btn secondary"
+                onClick={() => setShowCreateLabelForm(!showCreateLabelForm)}
+                disabled={!authStatus.authenticated}
+              >
+                <Settings size={16} /> Add Custom Label
               </button>
               <button
                 className="btn"
@@ -382,6 +400,77 @@ const JobEmailCategorizationApp = () => {
             <div className="card__alert error">
               <AlertCircle size={16} />
               <span>{labelsError}</span>
+            </div>
+          )}
+
+          {showCreateLabelForm && (
+            <div className="card__form">
+              <h3>Create Custom Label</h3>
+              <div className="form-group">
+                <label htmlFor="labelName">Label Name *</label>
+                <input
+                  id="labelName"
+                  type="text"
+                  value={newLabel.name}
+                  onChange={(e) => setNewLabel({ ...newLabel, name: e.target.value })}
+                  placeholder="Enter label name"
+                  disabled={createLabelLoading}
+                />
+              </div>
+              <div className="form-group">
+                <label htmlFor="labelDescription">Description</label>
+                <input
+                  id="labelDescription"
+                  type="text"
+                  value={newLabel.description}
+                  onChange={(e) => setNewLabel({ ...newLabel, description: e.target.value })}
+                  placeholder="Enter label description"
+                  disabled={createLabelLoading}
+                />
+              </div>
+              <div className="form-group">
+                <label htmlFor="labelColor">Color</label>
+                <input
+                  id="labelColor"
+                  type="color"
+                  value={newLabel.color}
+                  onChange={(e) => setNewLabel({ ...newLabel, color: e.target.value })}
+                  disabled={createLabelLoading}
+                />
+              </div>
+              <div className="form-group">
+                <label htmlFor="labelIcon">Icon</label>
+                <input
+                  id="labelIcon"
+                  type="text"
+                  value={newLabel.icon}
+                  onChange={(e) => setNewLabel({ ...newLabel, icon: e.target.value })}
+                  placeholder="📋"
+                  disabled={createLabelLoading}
+                />
+              </div>
+              {createLabelError && (
+                <div className="card__alert error">
+                  <AlertCircle size={16} />
+                  <span>{createLabelError}</span>
+                </div>
+              )}
+              <div className="form-actions">
+                <button
+                  className="btn primary"
+                  onClick={handleCreateCustomLabel}
+                  disabled={!newLabel.name.trim() || createLabelLoading}
+                >
+                  {createLabelLoading ? 'Creating...' : 'Create Label'}
+                </button>
+                <button
+                  className="btn"
+                  onClick={() => setShowCreateLabelForm(false)}
+                  disabled={createLabelLoading}
+                >
+                  Cancel
+                </button>
+              </div>
             </div>
           )}
 

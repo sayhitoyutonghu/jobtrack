@@ -196,6 +196,23 @@ class GmailService {
   }
 
   /**
+   * Create a single custom label
+   */
+  async createCustomLabel(labelData) {
+    const { name, description, color, icon } = labelData;
+    
+    const labelConfig = {
+      name,
+      description: description || '',
+      color: color || { backgroundColor: '#4a86e8', textColor: '#ffffff' },
+      icon: icon || '📋',
+      moveToFolder: false
+    };
+    
+    return await this.createLabel(labelConfig);
+  }
+
+  /**
    * Find a label by name
    */
   async findLabel(labelName) {

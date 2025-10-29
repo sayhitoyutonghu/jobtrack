@@ -151,8 +151,7 @@ const config = {
   dev: {
     hotReload: true,
     debugMode: true,
-    mockData: false,
-    testMode: process.env.TEST_MODE === 'true'
+    mockData: false
   }
 };
 
@@ -173,7 +172,6 @@ if (isProduction) {
 if (isTest) {
   config.database.path = ':memory:';
   config.gmail.autoScanInterval = 1000; // 1 second for tests
-  config.dev.testMode = true;
 }
 
 // Validation

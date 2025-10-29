@@ -29,11 +29,6 @@ export const authApi = {
     window.location.href = "https://jobtrack-production.up.railway.app/auth/google";
   },
   
-  testLogin: async () => {
-    const response = await apiClient.post('/auth/test-login');
-    return response.data;
-  },
-  
   checkStatus: async () => {
     const response = await apiClient.get('/auth/status');
     return response.data;
@@ -43,6 +38,11 @@ export const authApi = {
 export const gmailApi = {
   setupLabels: async () => {
     const response = await apiClient.post('/api/gmail/setup');
+    return response.data;
+  },
+  
+  createLabel: async (labelData) => {
+    const response = await apiClient.post('/api/gmail/create-label', labelData);
     return response.data;
   },
   

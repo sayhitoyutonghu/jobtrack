@@ -84,26 +84,18 @@ class AutomationVerifier {
   }
 
   /**
-   * 测试用户认证（测试模式）
+   * 测试用户认证（需要手动Google OAuth）
    */
   async testUserAuthentication() {
-    try {
-      const response = await axios.post(`${API_BASE}/auth/test-login`);
-      if (response.data.success && response.data.sessionId) {
-        this.sessionId = response.data.sessionId;
-        this.addResult('用户认证', 'PASS', '测试模式认证成功', {
-          sessionId: this.sessionId,
-          testMode: response.data.testMode
-        });
-        return true;
-      } else {
-        this.addResult('用户认证', 'FAIL', '认证失败', response.data);
-        return false;
-      }
-    } catch (error) {
-      this.addResult('用户认证', 'FAIL', '认证请求失败', error.message);
-      return false;
-    }
+    console.log('⚠️  注意: 需要手动进行Google OAuth认证');
+    console.log('   请访问: http://localhost:3000/auth/google');
+    console.log('   认证完成后，请提供session ID继续测试');
+    
+    // 由于移除了test login，这里需要用户手动认证
+    this.addResult('用户认证', 'SKIP', '需要手动Google OAuth认证', {
+      message: '请访问 /auth/google 进行认证'
+    });
+    return false;
   }
 
   /**

@@ -85,12 +85,12 @@ class FullyAutomatedDemo {
       console.log(`   自动扫描会话: ${response.data.services.autoScan.activeSessions}`);
     });
 
-    // 步骤2：模拟用户登录
-    this.addStep('模拟用户Gmail连接（测试模式）', async () => {
-      const response = await axios.post(`${API_BASE}/auth/test-login`);
-      this.sessionId = response.data.sessionId;
-      console.log(`   会话ID: ${this.sessionId}`);
-      console.log(`   测试模式: ${response.data.testMode}`);
+    // 步骤2：需要手动Google OAuth认证
+    this.addStep('需要手动Google OAuth认证', async () => {
+      console.log('   ⚠️  请访问: http://localhost:3000/auth/google');
+      console.log('   认证完成后，请提供session ID继续演示');
+      console.log('   ❌ 测试模式已移除，需要真实Gmail认证');
+      throw new Error('需要手动Google OAuth认证');
     });
 
     // 步骤3：检查自动管理器状态

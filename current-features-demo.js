@@ -32,11 +32,11 @@ async function demoCurrentFeatures() {
     console.log('\n📋 步骤 2: 测试用户认证（测试模式）');
     console.log('━'.repeat(50));
     
-    const loginResponse = await axios.post(`${API_BASE}/auth/test-login`);
-    const sessionId = loginResponse.data.sessionId;
-    console.log('✅ 用户认证成功');
-    console.log(`   会话ID: ${sessionId}`);
-    console.log(`   测试模式: ${loginResponse.data.testMode}`);
+    console.log('⚠️  需要手动Google OAuth认证');
+    console.log('   请访问: http://localhost:3000/auth/google');
+    console.log('   认证完成后，请提供session ID继续演示');
+    console.log('❌ 测试模式已移除，需要真实Gmail认证');
+    return;
     
     await sleep(1000);
 

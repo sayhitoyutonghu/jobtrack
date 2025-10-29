@@ -167,48 +167,6 @@ app.get('/auth/status', (req, res) => {
   res.json({ authenticated: true, sessionId, createdAt: session.createdAt });
 });
 
-// ============================================
-// TEST MODE LOGIN (No Google OAuth required)
-// ============================================
-
-app.post('/auth/test-login', (req, res) => {
-  console.log('🧪 Test mode login initiated...');
-  
-  // Create a mock session for testing
-  const sessionId = 'test-' + Math.random().toString(36).substring(7);
-  
-  // Create mock auth (no real Google credentials needed)
-  const mockSession = {
-    auth: null, // No real auth in test mode
-    tokens: {
-      access_token: 'test-access-token',
-      refresh_token: 'test-refresh-token',
-      scope: 'https://www.googleapis.com/auth/gmail.modify https://www.googleapis.com/auth/gmail.labels',
-      token_type: 'Bearer',
-      expiry_date: Date.now() + 3600000 // 1 hour from now
-    },
-    createdAt: new Date(),
-    testMode: true
-  };
-  
-    // Store in memory
-    sessions.set(sessionId, mockSession);
-    // Persist to disk
-    saveSession(sessionId, mockSession.tokens);
-    
-    // 测试模式不自动启动扫描
-    console.log('🧪 [TEST MODE] 测试模式不自动启动扫描');
-  
-  console.log('✅ Test login successful!');
-  console.log(`📝 Test Session ID: ${sessionId}`);
-  
-  res.json({
-    success: true,
-    sessionId,
-    message: 'Test mode login successful',
-    testMode: true
-  });
-});
 
 // ============================================
 // AUTH MIDDLEWARE
