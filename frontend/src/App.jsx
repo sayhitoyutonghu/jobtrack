@@ -275,39 +275,48 @@ const JobEmailCategorizationApp = () => {
       setAiError(null);
       setAiAnalysis(null);
       
-      const response = await gmailApi.analyzeEmail(emailContent);
-      if (!response.success) {
-        throw new Error(response.error || 'AI分析失败');
+      // Try backend analysis, but we'll override with the requested preset autofill
+      let response = null;
+      try {
+        response = await gmailApi.analyzeEmail(emailContent);
+      } catch (e) {
+        // ignore; we will still apply preset autofill below
       }
-      
-      // Always show analysis result, even if not job-related
-      setAiAnalysis(response.analysis);
-      
-      // Auto-fill form with AI suggestions, prioritizing sender-based names
-      let labelName = response.analysis.labelName || '';
-      
-      // If we have sender info, use it to enhance the label name
-      if (response.analysis.senderInfo) {
-        const senderInfo = response.analysis.senderInfo;
-        if (senderInfo.suggestedLabelName) {
-          labelName = senderInfo.suggestedLabelName;
-        } else if (senderInfo.companyName) {
-          labelName = senderInfo.companyName;
-        } else if (senderInfo.senderName) {
-          labelName = senderInfo.senderName;
-        }
-      }
-      
+
+      // Preset autofill requested by user
+      const preset = {
+        labelName: 'Application',
+        description: 'All job application related emails (applied, viewed, job alerts)',
+        keywords: [
+          'job alert',
+          'new jobs',
+          'jobs for you',
+          'application received',
+          'thank you for applying'
+        ],
+        senders: [
+          'jobalerts-noreply@linkedin.com',
+          'jobs-noreply@linkedin.com',
+          'noreply@indeed.com'
+        ],
+        confidence: 0.9,
+        reasoning: 'Preset: generic application-related routing rules'
+      };
+
+      // Show preset as the analysis result for clarity
+      setAiAnalysis(preset);
+
+      // Autofill the create form with preset values
       setNewLabel({
-        name: labelName,
-        description: response.analysis.description || '',
-        color: response.analysis.color || '#4a86e8',
-        icon: response.analysis.icon || '📋'
+        name: preset.labelName,
+        description: preset.description,
+        color: '#4a86e8',
+        icon: '📋'
       });
-      
-      // Show warning if not job-related, but don't block form filling
-      if (!response.isJobRelated) {
-        setAiError(`注意: ${response.message || '这封邮件似乎与求职无关，但AI仍会生成标签建议'}`);
+
+      // If backend indicated non job-related, surface a soft warning; otherwise ignore
+      if (response && response.success === true && response.isJobRelated === false) {
+        setAiError(`注意: ${response.message || '这封邮件似乎与求职无关，但已填充通用“Application”规则'}`);
       }
       
     } catch (error) {
