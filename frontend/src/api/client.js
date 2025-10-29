@@ -46,6 +46,11 @@ export const gmailApi = {
     return response.data;
   },
   
+  analyzeEmail: async (emailContent) => {
+    const response = await apiClient.post('/api/gmail/analyze-email', { emailContent });
+    return response.data;
+  },
+  
   scanEmails: async (options = {}) => {
     const response = await apiClient.post('/api/gmail/scan', options);
     return response.data;

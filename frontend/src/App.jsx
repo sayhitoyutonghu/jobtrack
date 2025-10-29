@@ -38,6 +38,12 @@ const JobEmailCategorizationApp = () => {
   const [createLabelLoading, setCreateLabelLoading] = useState(false);
   const [createLabelError, setCreateLabelError] = useState(null);
 
+  // AI analysis state
+  const [emailContent, setEmailContent] = useState('');
+  const [aiAnalysis, setAiAnalysis] = useState(null);
+  const [aiLoading, setAiLoading] = useState(false);
+  const [aiError, setAiError] = useState(null);
+
   // query: actual Gmail query string sent to backend
   // queryOption: which dropdown option is selected ('is:unread'|'in:inbox'|'in:sent'|'custom')
   const [query, setQuery] = useState('is:unread');
@@ -207,6 +213,8 @@ const JobEmailCategorizationApp = () => {
       
       // Reset form and hide it
       setNewLabel({ name: '', description: '', color: '#4a86e8', icon: '📋' });
+      setEmailContent('');
+      setAiAnalysis(null);
       setShowCreateLabelForm(false);
       
       // Refresh labels list
@@ -218,6 +226,40 @@ const JobEmailCategorizationApp = () => {
       setCreateLabelError(error.message);
     } finally {
       setCreateLabelLoading(false);
+    }
+  };
+
+  const handleAnalyzeEmail = async () => {
+    try {
+      setAiLoading(true);
+      setAiError(null);
+      setAiAnalysis(null);
+      
+      const response = await gmailApi.analyzeEmail(emailContent);
+      if (!response.success) {
+        throw new Error(response.error || 'AI分析失败');
+      }
+      
+      if (!response.isJobRelated) {
+        setAiError(response.message || '这封邮件似乎与求职无关');
+        return;
+      }
+      
+      setAiAnalysis(response.analysis);
+      
+      // Auto-fill form with AI suggestions
+      setNewLabel({
+        name: response.analysis.labelName || '',
+        description: response.analysis.description || '',
+        color: response.analysis.color || '#4a86e8',
+        icon: response.analysis.icon || '📋'
+      });
+      
+    } catch (error) {
+      console.error('Failed to analyze email:', error);
+      setAiError(error.message);
+    } finally {
+      setAiLoading(false);
     }
   };
 
@@ -418,8 +460,50 @@ const JobEmailCategorizationApp = () => {
               </div>
 
               <div className="form-divider">
-                <span>Or create a custom label:</span>
+                <span>Or create a custom label with AI assistance:</span>
               </div>
+
+              <div className="form-group">
+                <label htmlFor="emailContent">Paste Example Email *</label>
+                <textarea
+                  id="emailContent"
+                  value={emailContent}
+                  onChange={(e) => setEmailContent(e.target.value)}
+                  placeholder="Paste an example email here and AI will analyze it to suggest label rules..."
+                  rows="6"
+                  disabled={aiLoading || createLabelLoading}
+                  className="form-textarea"
+                />
+                <button
+                  type="button"
+                  className="btn secondary"
+                  onClick={handleAnalyzeEmail}
+                  disabled={!emailContent.trim() || aiLoading || createLabelLoading}
+                  style={{ marginTop: '0.5rem' }}
+                >
+                  {aiLoading ? 'Analyzing...' : '🤖 Analyze with AI'}
+                </button>
+              </div>
+
+              {aiError && (
+                <div className="card__alert error">
+                  <AlertCircle size={16} />
+                  <span>{aiError}</span>
+                </div>
+              )}
+
+              {aiAnalysis && (
+                <div className="ai-analysis-result">
+                  <h4>🤖 AI Analysis Result</h4>
+                  <div className="analysis-details">
+                    <p><strong>Suggested Label:</strong> {aiAnalysis.labelName}</p>
+                    <p><strong>Description:</strong> {aiAnalysis.description}</p>
+                    <p><strong>Keywords:</strong> {aiAnalysis.keywords?.join(', ')}</p>
+                    <p><strong>Confidence:</strong> {Math.round(aiAnalysis.confidence * 100)}%</p>
+                    <p><strong>Reasoning:</strong> {aiAnalysis.reasoning}</p>
+                  </div>
+                </div>
+              )}
 
               <div className="form-group">
                 <label htmlFor="labelName">Label Name *</label>

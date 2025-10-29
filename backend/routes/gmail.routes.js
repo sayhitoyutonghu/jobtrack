@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const GmailService = require('../services/gmail.service');
 const ClassifierService = require('../services/classifier.service');
+const AILabelAnalyzerService = require('../services/ai-label-analyzer.service');
 const { JOB_LABELS } = require('../config/labels');
 const AutoScanService = require('../services/autoscan.service');
 
@@ -58,6 +59,64 @@ router.post('/create-label', async (req, res) => {
     });
   } catch (error) {
     console.error('Create label error:', error);
+    res.status(500).json({ 
+      success: false,
+      error: error.message 
+    });
+  }
+});
+
+/**
+ * POST /api/gmail/analyze-email
+ * Analyze email content and suggest label configuration
+ */
+router.post('/analyze-email', async (req, res) => {
+  try {
+    const { emailContent } = req.body;
+    
+    if (!emailContent || !emailContent.trim()) {
+      return res.status(400).json({
+        success: false,
+        error: 'Email content is required'
+      });
+    }
+
+    const aiAnalyzer = new AILabelAnalyzerService(process.env.OPENAI_API_KEY);
+    
+    // First check if it's job-related
+    const jobCheck = await aiAnalyzer.isJobRelated(emailContent);
+    if (!jobCheck.success) {
+      return res.status(500).json({
+        success: false,
+        error: 'Failed to analyze email: ' + jobCheck.error
+      });
+    }
+
+    if (!jobCheck.isJobRelated) {
+      return res.json({
+        success: true,
+        isJobRelated: false,
+        message: 'This email does not appear to be job-related',
+        reasoning: jobCheck.reasoning
+      });
+    }
+
+    // Analyze for label suggestions
+    const analysis = await aiAnalyzer.analyzeEmailForLabel(emailContent);
+    if (!analysis.success) {
+      return res.status(500).json({
+        success: false,
+        error: 'Failed to analyze email: ' + analysis.error
+      });
+    }
+
+    res.json({
+      success: true,
+      isJobRelated: true,
+      analysis: analysis.analysis
+    });
+  } catch (error) {
+    console.error('Email analysis error:', error);
     res.status(500).json({ 
       success: false,
       error: error.message 

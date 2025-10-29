@@ -48,7 +48,9 @@ async function saveConfig(config) {
 router.get('/', async (req, res) => {
   try {
     const config = await loadConfig();
-    const labelsWithStatus = JOB_LABELS.map(label => {
+    
+    // Get preset labels
+    const presetLabels = JOB_LABELS.map(label => {
       const id = label.name.toLowerCase().replace(/[^a-z0-9]/g, '-');
       const savedConfig = config.labels[id] || {};
       
@@ -58,13 +60,54 @@ router.get('/', async (req, res) => {
         enabled: savedConfig.enabled !== undefined ? savedConfig.enabled : true,
         description: savedConfig.description || label.description,
         keywords: savedConfig.keywords || label.keywords || [],
-        senders: savedConfig.senders || label.senders || []
+        senders: savedConfig.senders || label.senders || [],
+        type: 'preset'
       };
     });
 
+    // Get custom labels from Gmail if user is authenticated
+    let customLabels = [];
+    if (req.user && req.user.auth) {
+      try {
+        const GmailService = require('../services/gmail.service');
+        const gmailService = new GmailService(req.user.auth);
+        const gmailLabels = await gmailService.listLabels();
+        
+        // Filter out system labels and preset labels
+        const presetLabelNames = JOB_LABELS.map(l => l.name);
+        customLabels = gmailLabels
+          .filter(label => 
+            label.type === 'user' && 
+            !presetLabelNames.includes(label.name) &&
+            !label.name.startsWith('JobTrack/') // Exclude our own labels
+          )
+          .map(label => ({
+            id: label.name.toLowerCase().replace(/[^a-z0-9]/g, '-'),
+            name: label.name,
+            description: `Custom label: ${label.name}`,
+            keywords: [],
+            senders: [],
+            enabled: true,
+            type: 'custom',
+            color: {
+              backgroundColor: label.color?.backgroundColor || '#4a86e8',
+              textColor: label.color?.textColor || '#ffffff'
+            },
+            icon: '📋',
+            messagesTotal: label.messagesTotal || 0,
+            messagesUnread: label.messagesUnread || 0
+          }));
+      } catch (gmailError) {
+        console.warn('Failed to fetch custom labels from Gmail:', gmailError.message);
+        // Continue without custom labels if Gmail fetch fails
+      }
+    }
+
+    const allLabels = [...presetLabels, ...customLabels];
+
     res.json({
       success: true,
-      labels: labelsWithStatus,
+      labels: allLabels,
       colors: GMAIL_COLORS
     });
   } catch (error) {
