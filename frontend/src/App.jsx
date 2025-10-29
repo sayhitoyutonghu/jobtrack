@@ -327,6 +327,13 @@ const JobEmailCategorizationApp = () => {
   const handleScanEmails = async () => {
     try {
       setScanLoading(true);
+      setScanError(null);
+      
+      // Check if user is authenticated
+      if (!authStatus.authenticated) {
+        throw new Error('请先登录Gmail账户才能扫描邮件。请点击"Sign in with Google"按钮登录。');
+      }
+      
       const response = await gmailApi.scanEmails({ query, maxResults });
       if (!response.success) {
         throw new Error(response.error || 'Scan failed');
@@ -335,7 +342,13 @@ const JobEmailCategorizationApp = () => {
       setScanError(null);
     } catch (error) {
       console.error('Failed to scan emails:', error);
-      setScanError(error.message);
+      
+      // Check if it's an authentication error
+      if (error.message.includes('401') || error.message.includes('Unauthorized') || error.message.includes('Invalid or expired session') || error.message.includes('No session ID provided')) {
+        setScanError('请先登录Gmail账户才能扫描邮件。请点击"Sign in with Google"按钮登录。');
+      } else {
+        setScanError(error.message);
+      }
     } finally {
       setScanLoading(false);
     }
