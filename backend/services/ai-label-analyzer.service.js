@@ -1,4 +1,31 @@
 const OpenAI = require('openai');
+const crypto = require('crypto');
+const path = require('path');
+const PersistentCache = require('./persistent-cache.service');
+
+// Persistent caches (file-backed) with TTLs
+const analyzeCache = new PersistentCache({
+  filePath: path.join(__dirname, '../data/cache-analyze.json'),
+  defaultTtlMs: 7 * 24 * 60 * 60 * 1000
+});
+const senderInfoCache = new PersistentCache({
+  filePath: path.join(__dirname, '../data/cache-sender.json'),
+  defaultTtlMs: 14 * 24 * 60 * 60 * 1000
+});
+const jobCheckCache = new PersistentCache({
+  filePath: path.join(__dirname, '../data/cache-jobcheck.json'),
+  defaultTtlMs: 3 * 24 * 60 * 60 * 1000
+});
+
+function truncateContent(input, limit = 1500) {
+  if (!input) return '';
+  const text = input.toString();
+  return text.length > limit ? text.slice(0, limit) : text;
+}
+
+function hashContent(input) {
+  return crypto.createHash('sha1').update(input || '').digest('hex');
+}
 
 class AILabelAnalyzerService {
   constructor(apiKey) {
@@ -10,6 +37,10 @@ class AILabelAnalyzerService {
    */
   async analyzeEmailForLabel(emailContent) {
     try {
+      const truncated = truncateContent(emailContent, 1500);
+      const cacheKey = hashContent(truncated);
+      const cached = await analyzeCache.get(cacheKey);
+      if (cached) return cached;
       const prompt = `You are an AI assistant that analyzes emails to create Gmail label rules. 
 
 Given this email content, analyze it and suggest:
@@ -21,7 +52,7 @@ Given this email content, analyze it and suggest:
 6. A color suggestion (hex code)
 
 Email content:
-${emailContent}
+${truncated}
 
 IMPORTANT LABEL NAMING RULES:
 - If the email is from a company/organization, use the company name as the label (e.g., "Pursuit", "LinkedIn", "Google")
@@ -53,8 +84,8 @@ Analyze the email and suggest appropriate labels for ANY type of email, includin
 Always provide a label suggestion regardless of the email type.`;
 
       const response = await this.openai.chat.completions.create({
-        model: 'gpt-3.5-turbo',
-        max_tokens: 1000,
+        model: process.env.OPENAI_MODEL || 'gpt-4o-mini',
+        max_tokens: 300,
         messages: [{ role: 'user', content: prompt }]
       });
 
@@ -73,10 +104,12 @@ Always provide a label suggestion regardless of the email type.`;
         throw new Error('Invalid analysis response from AI');
       }
 
-      return {
+      const result = {
         success: true,
         analysis
       };
+      await analyzeCache.set(cacheKey, result);
+      return result;
 
     } catch (error) {
       console.error('AI analysis error:', error);
@@ -92,6 +125,10 @@ Always provide a label suggestion regardless of the email type.`;
    */
   async extractSenderInfo(emailContent) {
     try {
+      const truncated = truncateContent(emailContent, 800);
+      const cacheKey = hashContent(truncated);
+      const cached = await senderInfoCache.get(cacheKey);
+      if (cached) return cached;
       const prompt = `Extract sender information from this email content. Look for:
 1. From field or sender email address
 2. Company/organization name
@@ -99,7 +136,7 @@ Always provide a label suggestion regardless of the email type.`;
 4. Domain name
 
 Email content:
-${emailContent}
+${truncated}
 
 Respond in JSON format:
 {
@@ -113,8 +150,8 @@ Respond in JSON format:
 If information is not available, use null for that field.`;
 
       const response = await this.openai.chat.completions.create({
-        model: 'gpt-3.5-turbo',
-        max_tokens: 200,
+        model: process.env.OPENAI_MODEL || 'gpt-4o-mini',
+        max_tokens: 150,
         messages: [{ role: 'user', content: prompt }]
       });
 
@@ -123,10 +160,12 @@ If information is not available, use null for that field.`;
       
       if (jsonMatch) {
         const senderInfo = JSON.parse(jsonMatch[0]);
-        return {
+        const result = {
           success: true,
           senderInfo
         };
+        await senderInfoCache.set(cacheKey, result);
+        return result;
       } else {
         return {
           success: false,
@@ -148,27 +187,33 @@ If information is not available, use null for that field.`;
    */
   async isJobRelated(emailContent) {
     try {
+      const truncated = truncateContent(emailContent, 600);
+      const cacheKey = hashContent(truncated);
+      const cached = await jobCheckCache.get(cacheKey);
+      if (cached) return cached;
       const prompt = `Analyze this email content and determine if it's job-related (job applications, interviews, offers, rejections, recruiter communications, job alerts, etc.).
 
 Email content:
-${emailContent}
+${truncated}
 
 Respond with only "YES" or "NO" followed by a brief reason.`;
 
       const response = await this.openai.chat.completions.create({
-        model: 'gpt-3.5-turbo',
-        max_tokens: 100,
+        model: process.env.OPENAI_MODEL || 'gpt-4o-mini',
+        max_tokens: 60,
         messages: [{ role: 'user', content: prompt }]
       });
 
       const content = response.choices[0].message.content.trim();
       const isJobRelated = content.startsWith('YES');
       
-      return {
+      const result = {
         success: true,
         isJobRelated,
         reasoning: content
       };
+      await jobCheckCache.set(cacheKey, result);
+      return result;
 
     } catch (error) {
       console.error('Job-related check error:', error);

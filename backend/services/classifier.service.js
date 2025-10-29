@@ -1,6 +1,8 @@
 const { JOB_LABELS } = require('../config/labels');
 const fs = require('fs').promises;
 const path = require('path');
+const crypto = require('crypto');
+const PersistentCache = require('./persistent-cache.service');
 
 /**
  * Email classifier service for job-related emails.
@@ -15,7 +17,7 @@ const CATEGORY_MAP = {
   ghost: 'Ghost'
 };
 
-const OPENAI_MODEL = process.env.OPENAI_MODEL || 'gpt-4-1106-preview';
+const OPENAI_MODEL = process.env.OPENAI_MODEL || 'gpt-4o-mini';
 const ANTHROPIC_MODEL = process.env.ANTHROPIC_MODEL || 'claude-3-opus-20240229';
 const OPENAI_TEMPERATURE = Number.isFinite(Number(process.env.OPENAI_TEMPERATURE))
   ? Number(process.env.OPENAI_TEMPERATURE)
@@ -58,10 +60,26 @@ class EmailClassifier {
     }
   }
 
+  static getCache() {
+    if (!this._cache) {
+      this._cache = new PersistentCache({
+        filePath: path.join(__dirname, '../data/cache-classify.json'),
+        defaultTtlMs: 7 * 24 * 60 * 60 * 1000
+      });
+    }
+    return this._cache;
+  }
+
+  static hashEmail(email) {
+    const subject = (email?.subject || '').toString();
+    const body = (email?.body || '').toString();
+    return crypto.createHash('sha1').update(`${subject}\n${body}`).digest('hex');
+  }
+
   buildPrompt(email) {
     const safe = (value) => (value || '').toString().trim();
     const body = safe(email.body);
-    const trimmedBody = body.length > 6000 ? `${body.slice(0, 6000)}...` : body;
+    const trimmedBody = body.length > 2000 ? `${body.slice(0, 2000)}...` : body;
 
     return `You are an assistant that classifies job-search related emails into one of five categories. Follow the rules strictly.
 
@@ -293,6 +311,12 @@ Respond with only one label (lowercase).`;
       return null;
     }
 
+    // Cache by subject+body to avoid repeated AI calls on re-runs
+    const cacheKey = EmailClassifier.hashEmail(email);
+    const cache = EmailClassifier.getCache();
+    const cached = await cache.get(cacheKey);
+    if (cached !== null) return cached;
+
     // Skip finance/receipt emails
     if (this.isFinanceReceipt(email)) {
       return null;
@@ -314,18 +338,25 @@ Respond with only one label (lowercase).`;
 
         if (this.useOpenAI) {
           const result = await this.classifyWithOpenAI(prompt);
-          if (result) return result;
+          if (result) {
+            await cache.set(cacheKey, result);
+            return result;
+          }
         }
 
         if (this.useAnthropic) {
           const result = await this.classifyWithAnthropic(prompt);
-          if (result) return result;
+          if (result) {
+            await cache.set(cacheKey, result);
+            return result;
+          }
         }
       } catch (error) {
         console.error('AI classification failed:', error.message);
       }
     }
 
+    await cache.set(cacheKey, null, 60 * 60 * 1000);
     return null;
   }
 }
