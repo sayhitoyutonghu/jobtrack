@@ -388,6 +388,43 @@ class GmailService {
   }
 
   /**
+   * Delete a label completely from Gmail by label ID
+   */
+  async deleteLabelById(labelId) {
+    try {
+      // 首先获取标签信息以检查是否是系统标签
+      const label = await this.gmail.users.labels.get({
+        userId: 'me',
+        id: labelId
+      });
+      
+      const labelName = label.data.name;
+      
+      // 检查是否是系统标签（不能删除）
+      const systemLabels = ['INBOX', 'SENT', 'DRAFT', 'SPAM', 'TRASH', 'STARRED', 'IMPORTANT', 'UNREAD'];
+      if (systemLabels.includes(labelName)) {
+        return { success: false, reason: 'system-label', message: 'Cannot delete system labels' };
+      }
+      
+      // 删除标签
+      await this.gmail.users.labels.delete({
+        userId: 'me',
+        id: labelId
+      });
+      
+      console.log(`✅ Successfully deleted label by ID: ${labelName} (${labelId})`);
+      return { 
+        success: true, 
+        deleted: labelName,
+        labelId: labelId
+      };
+    } catch (error) {
+      console.error(`Error deleting label by ID ${labelId}:`, error);
+      return { success: false, error: error.message };
+    }
+  }
+
+  /**
    * Delete a label completely from Gmail
    */
   async deleteLabel(labelName) {

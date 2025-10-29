@@ -82,7 +82,7 @@ router.get('/', async (req, res) => {
             !label.name.startsWith('JobTrack/') // Exclude our own labels
           )
           .map(label => ({
-            id: label.name.toLowerCase().replace(/[^a-z0-9]/g, '-'),
+            id: label.id, // Use Gmail's actual label ID
             name: label.name,
             description: `Custom label: ${label.name}`,
             keywords: [],
@@ -277,47 +277,63 @@ router.delete('/:id/delete-from-gmail', async (req, res) => {
       });
     }
 
-    const config = await loadConfig();
-    if (!config.labels[id]) {
-      return res.status(404).json({
-        success: false,
-        error: 'Label not found'
-      });
-    }
-
-    const labelName = config.labels[id].name;
-    console.log(`[labels] Deleting label "${labelName}" from Gmail`);
-
-    // 使用Gmail服务删除label
     const GmailService = require('../services/gmail.service');
     const gmailService = new GmailService(req.user.auth);
     
-    const result = await gmailService.deleteLabel(labelName);
-    
-    if (result.success) {
-      // 从配置中移除该label
-      delete config.labels[id];
-      await saveConfig(config);
-      
-      res.json({
-        success: true,
-        message: `Successfully deleted label "${labelName}" from Gmail`,
-        labelName,
-        labelId: result.labelId
-      });
-    } else {
-      let errorMessage = result.error || 'Failed to delete label';
-      if (result.reason === 'system-label') {
-        errorMessage = 'Cannot delete system labels (INBOX, SENT, etc.)';
-      } else if (result.reason === 'label-not-found') {
-        errorMessage = 'Label not found in Gmail';
+    // 首先尝试通过Gmail ID直接删除（用于自定义标签）
+    try {
+      const result = await gmailService.deleteLabelById(id);
+      if (result.success) {
+        return res.json({
+          success: true,
+          message: `Successfully deleted label from Gmail`,
+          labelId: id
+        });
       }
-      
-      res.status(400).json({
-        success: false,
-        error: errorMessage
-      });
+    } catch (gmailError) {
+      console.log(`[labels] Direct Gmail ID deletion failed, trying by name: ${gmailError.message}`);
     }
+
+    // 如果直接删除失败，尝试通过配置中的名称删除（用于预设标签）
+    const config = await loadConfig();
+    if (config.labels[id]) {
+      const labelName = config.labels[id].name;
+      console.log(`[labels] Deleting preset label "${labelName}" from Gmail`);
+
+      const result = await gmailService.deleteLabel(labelName);
+      
+      if (result.success) {
+        // 从配置中移除该label
+        delete config.labels[id];
+        await saveConfig(config);
+        
+        return res.json({
+          success: true,
+          message: `Successfully deleted label "${labelName}" from Gmail`,
+          labelName,
+          labelId: result.labelId
+        });
+      } else {
+        let errorMessage = result.error || 'Failed to delete label';
+        if (result.reason === 'system-label') {
+          errorMessage = 'Cannot delete system labels (INBOX, SENT, etc.)';
+        } else if (result.reason === 'label-not-found') {
+          errorMessage = 'Label not found in Gmail';
+        }
+        
+        return res.status(400).json({
+          success: false,
+          error: errorMessage
+        });
+      }
+    }
+
+    // 如果都失败了，返回404
+    return res.status(404).json({
+      success: false,
+      error: 'Label not found'
+    });
+
   } catch (error) {
     console.error('Error deleting label from Gmail:', error);
     res.status(500).json({

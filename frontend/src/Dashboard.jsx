@@ -7,7 +7,6 @@ import { gmailApi } from './api/client';
 const Dashboard = ({ labels, loading, onRefresh, onToggleUpdate }) => {
   const [editingLabel, setEditingLabel] = useState(null);
   const [editForm, setEditForm] = useState({});
-  const [removingLabel, setRemovingLabel] = useState(null);
   const [deletingLabel, setDeletingLabel] = useState(null);
   const [togglingLabel, setTogglingLabel] = useState(null);
   const [toggleError, setToggleError] = useState(null);
@@ -105,28 +104,6 @@ const Dashboard = ({ labels, loading, onRefresh, onToggleUpdate }) => {
     }
   };
 
-  const removeLabelFromGmail = async (labelId, labelName) => {
-    if (!window.confirm(`Are you sure you want to remove the "${labelName}" label from all messages in Gmail? This action cannot be undone.`)) {
-      return;
-    }
-
-    setRemovingLabel(labelId);
-    try {
-      const result = await gmailApi.removeLabelFromGmail(labelId, 100);
-      
-      if (result.success) {
-        alert(`Successfully removed "${labelName}" label from ${result.removedCount} messages in Gmail.`);
-        if (onRefresh) onRefresh();
-      } else {
-        alert(`Failed to remove label: ${result.error}`);
-      }
-    } catch (error) {
-      console.error('Error removing label from Gmail:', error);
-      alert(`Error removing label: ${error.message}`);
-    } finally {
-      setRemovingLabel(null);
-    }
-  };
 
   const deleteLabelFromGmail = async (labelId, labelName) => {
     const confirmMessage = `⚠️ DANGER: This will permanently delete the "${labelName}" label from Gmail!\n\nThis action:\n• Cannot be undone\n• Will remove the label from ALL messages\n• Will delete the label completely from Gmail\n\nAre you absolutely sure you want to continue?`;
@@ -224,18 +201,6 @@ const Dashboard = ({ labels, loading, onRefresh, onToggleUpdate }) => {
                       <Edit3 size={16} />
                     </button>
                     <button 
-                      onClick={() => removeLabelFromGmail(label.id, label.name)}
-                      className="btn btn-remove"
-                      disabled={removingLabel === label.id}
-                      title="Remove this label from all messages in Gmail"
-                    >
-                      {removingLabel === label.id ? (
-                        <Activity size={16} className="animate-spin" />
-                      ) : (
-                        <Trash2 size={16} />
-                      )}
-                    </button>
-                    <button 
                       onClick={() => deleteLabelFromGmail(label.id, label.name)}
                       className="btn btn-delete"
                       disabled={deletingLabel === label.id}
@@ -244,7 +209,7 @@ const Dashboard = ({ labels, loading, onRefresh, onToggleUpdate }) => {
                       {deletingLabel === label.id ? (
                         <Activity size={16} className="animate-spin" />
                       ) : (
-                        <AlertTriangle size={16} />
+                        <Trash2 size={16} />
                       )}
                     </button>
                     <button 
