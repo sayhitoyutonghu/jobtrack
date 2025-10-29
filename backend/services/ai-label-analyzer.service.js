@@ -13,7 +13,7 @@ class AILabelAnalyzerService {
       const prompt = `You are an AI assistant that analyzes emails to create Gmail label rules. 
 
 Given this email content, analyze it and suggest:
-1. A suitable label name (2-3 words max)
+1. A suitable label name (2-3 words max) - PRIORITIZE sender-based names when appropriate
 2. A brief description
 3. Key keywords that would identify similar emails
 4. Sender patterns (domains or email patterns)
@@ -22,6 +22,13 @@ Given this email content, analyze it and suggest:
 
 Email content:
 ${emailContent}
+
+IMPORTANT LABEL NAMING RULES:
+- If the email is from a company/organization, use the company name as the label (e.g., "Pursuit", "LinkedIn", "Google")
+- If from a person, use their name or role (e.g., "John Smith", "Recruiter")
+- If it's a service/platform, use the service name (e.g., "GitHub", "Slack", "Zoom")
+- For generic emails, use descriptive terms (e.g., "Newsletter", "Notification", "Invoice")
+- Keep label names short and memorable (1-3 words max)
 
 Please respond in JSON format:
 {
@@ -73,6 +80,62 @@ Always provide a label suggestion regardless of the email type.`;
 
     } catch (error) {
       console.error('AI analysis error:', error);
+      return {
+        success: false,
+        error: error.message
+      };
+    }
+  }
+
+  /**
+   * Extract sender information from email content
+   */
+  async extractSenderInfo(emailContent) {
+    try {
+      const prompt = `Extract sender information from this email content. Look for:
+1. From field or sender email address
+2. Company/organization name
+3. Person's name
+4. Domain name
+
+Email content:
+${emailContent}
+
+Respond in JSON format:
+{
+  "senderEmail": "sender@company.com",
+  "senderName": "John Smith",
+  "companyName": "Company Name",
+  "domain": "company.com",
+  "suggestedLabelName": "Company Name"
+}
+
+If information is not available, use null for that field.`;
+
+      const response = await this.openai.chat.completions.create({
+        model: 'gpt-3.5-turbo',
+        max_tokens: 200,
+        messages: [{ role: 'user', content: prompt }]
+      });
+
+      const content = response.choices[0].message.content;
+      const jsonMatch = content.match(/\{[\s\S]*\}/);
+      
+      if (jsonMatch) {
+        const senderInfo = JSON.parse(jsonMatch[0]);
+        return {
+          success: true,
+          senderInfo
+        };
+      } else {
+        return {
+          success: false,
+          error: 'No valid JSON found in response'
+        };
+      }
+
+    } catch (error) {
+      console.error('Sender extraction error:', error);
       return {
         success: false,
         error: error.message

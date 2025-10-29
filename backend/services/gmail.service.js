@@ -213,6 +213,14 @@ class GmailService {
   }
 
   /**
+   * List all labels
+   */
+  async listLabels() {
+    const response = await this.gmail.users.labels.list({ userId: 'me' });
+    return response.data.labels || [];
+  }
+
+  /**
    * Find a label by name
    */
   async findLabel(labelName) {

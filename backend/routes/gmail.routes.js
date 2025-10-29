@@ -87,6 +87,9 @@ router.post('/analyze-email', async (req, res) => {
     const jobCheck = await aiAnalyzer.isJobRelated(emailContent);
     const isJobRelated = jobCheck.success ? jobCheck.isJobRelated : false;
     
+    // Extract sender information
+    const senderInfo = await aiAnalyzer.extractSenderInfo(emailContent);
+    
     // Always analyze for label suggestions regardless of job-related status
     const analysis = await aiAnalyzer.analyzeEmailForLabel(emailContent);
     if (!analysis.success) {
@@ -96,10 +99,16 @@ router.post('/analyze-email', async (req, res) => {
       });
     }
 
+    // Enhance analysis with sender information
+    const enhancedAnalysis = {
+      ...analysis.analysis,
+      senderInfo: senderInfo.success ? senderInfo.senderInfo : null
+    };
+
     res.json({
       success: true,
       isJobRelated,
-      analysis: analysis.analysis,
+      analysis: enhancedAnalysis,
       message: isJobRelated ? 'Email analyzed successfully' : 'This email does not appear to be job-related, but label suggestions are provided'
     });
   } catch (error) {

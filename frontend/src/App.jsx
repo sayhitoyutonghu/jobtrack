@@ -265,9 +265,23 @@ const JobEmailCategorizationApp = () => {
       // Always show analysis result, even if not job-related
       setAiAnalysis(response.analysis);
       
-      // Auto-fill form with AI suggestions regardless of job-related status
+      // Auto-fill form with AI suggestions, prioritizing sender-based names
+      let labelName = response.analysis.labelName || '';
+      
+      // If we have sender info, use it to enhance the label name
+      if (response.analysis.senderInfo) {
+        const senderInfo = response.analysis.senderInfo;
+        if (senderInfo.suggestedLabelName) {
+          labelName = senderInfo.suggestedLabelName;
+        } else if (senderInfo.companyName) {
+          labelName = senderInfo.companyName;
+        } else if (senderInfo.senderName) {
+          labelName = senderInfo.senderName;
+        }
+      }
+      
       setNewLabel({
-        name: response.analysis.labelName || '',
+        name: labelName,
         description: response.analysis.description || '',
         color: response.analysis.color || '#4a86e8',
         icon: response.analysis.icon || '📋'
