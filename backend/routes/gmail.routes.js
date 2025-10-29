@@ -83,25 +83,11 @@ router.post('/analyze-email', async (req, res) => {
 
     const aiAnalyzer = new AILabelAnalyzerService(process.env.OPENAI_API_KEY);
     
-    // First check if it's job-related
+    // Check if it's job-related (for informational purposes)
     const jobCheck = await aiAnalyzer.isJobRelated(emailContent);
-    if (!jobCheck.success) {
-      return res.status(500).json({
-        success: false,
-        error: 'Failed to analyze email: ' + jobCheck.error
-      });
-    }
-
-    if (!jobCheck.isJobRelated) {
-      return res.json({
-        success: true,
-        isJobRelated: false,
-        message: 'This email does not appear to be job-related',
-        reasoning: jobCheck.reasoning
-      });
-    }
-
-    // Analyze for label suggestions
+    const isJobRelated = jobCheck.success ? jobCheck.isJobRelated : false;
+    
+    // Always analyze for label suggestions regardless of job-related status
     const analysis = await aiAnalyzer.analyzeEmailForLabel(emailContent);
     if (!analysis.success) {
       return res.status(500).json({
@@ -112,8 +98,9 @@ router.post('/analyze-email', async (req, res) => {
 
     res.json({
       success: true,
-      isJobRelated: true,
-      analysis: analysis.analysis
+      isJobRelated,
+      analysis: analysis.analysis,
+      message: isJobRelated ? 'Email analyzed successfully' : 'This email does not appear to be job-related, but label suggestions are provided'
     });
   } catch (error) {
     console.error('Email analysis error:', error);

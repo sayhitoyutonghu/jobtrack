@@ -262,20 +262,21 @@ const JobEmailCategorizationApp = () => {
         throw new Error(response.error || 'AI分析失败');
       }
       
-      if (!response.isJobRelated) {
-        setAiError(response.message || '这封邮件似乎与求职无关');
-        return;
-      }
-      
+      // Always show analysis result, even if not job-related
       setAiAnalysis(response.analysis);
       
-      // Auto-fill form with AI suggestions
+      // Auto-fill form with AI suggestions regardless of job-related status
       setNewLabel({
         name: response.analysis.labelName || '',
         description: response.analysis.description || '',
         color: response.analysis.color || '#4a86e8',
         icon: response.analysis.icon || '📋'
       });
+      
+      // Show warning if not job-related, but don't block form filling
+      if (!response.isJobRelated) {
+        setAiError(`注意: ${response.message || '这封邮件似乎与求职无关，但AI仍会生成标签建议'}`);
+      }
       
     } catch (error) {
       console.error('Failed to analyze email:', error);

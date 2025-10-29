@@ -10,7 +10,7 @@ class AILabelAnalyzerService {
    */
   async analyzeEmailForLabel(emailContent) {
     try {
-      const prompt = `You are an AI assistant that analyzes emails to create Gmail label rules for job tracking. 
+      const prompt = `You are an AI assistant that analyzes emails to create Gmail label rules. 
 
 Given this email content, analyze it and suggest:
 1. A suitable label name (2-3 words max)
@@ -35,14 +35,15 @@ Please respond in JSON format:
   "reasoning": "Brief explanation of why this classification makes sense"
 }
 
-Focus on job-related email patterns like:
-- Job applications and responses
-- Interview scheduling
-- Offer letters
-- Rejection emails
-- Recruiter communications
-- Company newsletters
-- Job alerts and notifications`;
+Analyze the email and suggest appropriate labels for ANY type of email, including:
+- Job-related emails (applications, interviews, offers, rejections, recruiter communications)
+- Work emails (meetings, projects, announcements)
+- Personal emails (family, friends, social)
+- Business emails (invoices, contracts, services)
+- System emails (notifications, alerts, confirmations)
+- Any other email type you can identify
+
+Always provide a label suggestion regardless of the email type.`;
 
       const response = await this.openai.chat.completions.create({
         model: 'gpt-3.5-turbo',
