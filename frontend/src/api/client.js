@@ -12,6 +12,20 @@ const apiClient = axios.create({
   }
 });
 
+// Add response interceptor to handle errors
+apiClient.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    if (error.response?.status === 401) {
+      // Clear invalid session
+      localStorage.removeItem('session_id');
+      // Reload page to trigger re-authentication
+      window.location.reload();
+    }
+    return Promise.reject(error);
+  }
+);
+
 // 添加session ID到所有请求
 apiClient.interceptors.request.use(
   (config) => {

@@ -257,7 +257,13 @@ const JobEmailCategorizationApp = () => {
       
     } catch (error) {
       console.error('Failed to analyze email:', error);
-      setAiError(error.message);
+      
+      // Check if it's an authentication error
+      if (error.message.includes('401') || error.message.includes('Unauthorized') || error.message.includes('Invalid or expired session')) {
+        setAiError('请先登录Gmail账户才能使用AI分析功能。请点击"Sign in with Google"按钮登录。');
+      } else {
+        setAiError(error.message);
+      }
     } finally {
       setAiLoading(false);
     }
