@@ -26,7 +26,7 @@ apiClient.interceptors.request.use(
 
 export const authApi = {
   login: () => {
-    window.location.href = `${API_BASE_URL}/auth/google`;
+    window.location.href = "https://jobtrack-production.up.railway.app/auth/google";
   },
   
   testLogin: async () => {
