@@ -63,9 +63,9 @@ const JobEmailCategorizationApp = () => {
     }
     
     loadAuthStatus();
-    loadLabels();
     loadAutoScanStatus();
     loadAutoScanHistory();
+    // Don't call loadLabels here - it will be called when auth status is determined
   }, []);
 
   // Keep dropdown selection in sync with any query value coming from server
@@ -102,17 +102,29 @@ const JobEmailCategorizationApp = () => {
       setAuthStatus(status);
       if (status.authenticated && status.sessionId) {
         localStorage.setItem('session_id', status.sessionId);
+      } else {
+        // Clear invalid session
+        localStorage.removeItem('session_id');
       }
       
     } catch (error) {
       console.error('Failed to check auth status:', error);
       setAuthStatus({ authenticated: false, sessionId: null });
+      // Clear invalid session on error
+      localStorage.removeItem('session_id');
     } finally {
       setAuthLoading(false);
     }
   };
 
   const loadLabels = async () => {
+    // Don't load labels if not authenticated
+    if (!authStatus.authenticated) {
+      setLabels([]);
+      setLabelsLoading(false);
+      return;
+    }
+
     try {
       setLabelsLoading(true);
       const response = await gmailApi.getLabels();
@@ -172,6 +184,16 @@ const JobEmailCategorizationApp = () => {
       setLabelsError(null);
     }
   }, [labels, labelsError]);
+
+  // Reload labels when authentication status changes
+  useEffect(() => {
+    if (authStatus.authenticated) {
+      loadLabels();
+    } else {
+      setLabels([]);
+      setLabelsError(null);
+    }
+  }, [authStatus.authenticated]);
 
   const handleLogin = () => {
     authApi.login();

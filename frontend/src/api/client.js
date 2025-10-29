@@ -19,8 +19,8 @@ apiClient.interceptors.response.use(
     if (error.response?.status === 401) {
       // Clear invalid session
       localStorage.removeItem('session_id');
-      // Reload page to trigger re-authentication
-      window.location.reload();
+      // Don't auto-reload to prevent infinite loop
+      // Let the component handle the authentication state
     }
     return Promise.reject(error);
   }
