@@ -107,6 +107,13 @@ router.post('/analyze-email', async (req, res) => {
   try {
     const { emailContent } = req.body;
     
+    if (process.env.ENABLE_AI === 'false' || !process.env.OPENAI_API_KEY || process.env.OPENAI_API_KEY === 'sk-your-key-here') {
+      return res.status(503).json({
+        success: false,
+        error: 'AI analysis is disabled or not configured. Set ENABLE_AI!=false and OPENAI_API_KEY to enable.',
+      });
+    }
+
     if (!emailContent || !emailContent.trim()) {
       return res.status(400).json({
         success: false,
@@ -162,8 +169,13 @@ router.post('/scan', async (req, res) => {
     const { maxResults = 50, query = 'is:unread' } = req.body;
 
     const gmailService = new GmailService(req.user.auth);
-    const classifier = new ClassifierService(process.env.ANTHROPIC_API_KEY);
     const customClassifier = new CustomLabelClassifier();
+    const PersistentCache = require('../services/persistent-cache.service');
+    const path = require('path');
+    const seenCache = new PersistentCache({
+      filePath: path.join(__dirname, '../data/cache-seen.json'),
+      defaultTtlMs: 30 * 24 * 60 * 60 * 1000
+    });
 
     console.log('📧 [scan] scanning for new emails...', {
       query,
@@ -180,6 +192,14 @@ router.post('/scan', async (req, res) => {
     for (const message of messages) {
       try {
         const email = await gmailService.getEmail(message.id);
+
+        // Skip if we've processed this message recently
+        const seen = await seenCache.get(message.id);
+        if (seen) {
+          results.push({ id: message.id, skipped: 'cached-seen' });
+          console.log(`↪️  [scan] skipped ${message.id} (cached-seen)`);
+          continue;
+        }
         
         if (!email.body || email.body.length === 0) {
           results.push({ id: email.id, subject: email.subject, skipped: 'empty-body' });
@@ -212,21 +232,35 @@ router.post('/scan', async (req, res) => {
           continue;
         }
 
-        // Then try job-related classification
-        if (!classifier.isJobRelated(email)) {
+        // Then try job-related classification (quick heuristic, no AI)
+        const clfNoAI = new ClassifierService({ enableAI: false });
+        if (!clfNoAI.isJobRelated(email)) {
           // Give more context: finance/receipt ignored
-          const reason = classifier.isFinanceReceipt && classifier.isFinanceReceipt(email)
+          const reason = clfNoAI.isFinanceReceipt && clfNoAI.isFinanceReceipt(email)
             ? 'ignored-finance-receipt'
             : 'not-job-related';
           results.push({ id: email.id, subject: email.subject, skipped: reason });
           console.log(`↪️  [scan] skipped ${email.id} (${reason})`);
+          await seenCache.set(message.id, { skipped: reason, at: Date.now() });
           continue;
         }
+
+        // 70/30 policy: prefer keyword rules; only use AI on complex emails ~30% of the time
+        const bodyLen = (email.body || '').length;
+        const isComplex = bodyLen > 2000 || !email.subject || email.subject.length < 5;
+        const allowAIForThisEmail = isComplex && Math.random() < 0.3;
+
+        const classifier = new ClassifierService({
+          enableAI: allowAIForThisEmail,
+          openaiApiKey: process.env.OPENAI_API_KEY,
+          anthropicApiKey: process.env.ANTHROPIC_API_KEY
+        });
 
         const classification = await classifier.classify(email);
         if (!classification) {
           results.push({ id: email.id, subject: email.subject, skipped: 'no-match' });
           console.log(`↪️  [scan] skipped ${email.id} (no-match)`);
+          await seenCache.set(message.id, { skipped: 'no-match', at: Date.now() }, 6 * 60 * 60 * 1000);
           continue;
         }
 
@@ -265,12 +299,15 @@ router.post('/scan', async (req, res) => {
           removedLabels
         });
 
+        await seenCache.set(message.id, { labeled: classification.label, method: classification.method, at: Date.now() });
+
         // Rate limiting
         console.log(`✅ [scan] labeled ${email.id} as ${classification.label} via ${classification.method}`);
         await gmailService.sleep(100);
       } catch (err) {
         console.error(`❌ [scan] failed processing message ${message.id}:`, err.message);
         results.push({ id: message.id, skipped: 'error', error: err.message });
+        try { await seenCache.set(message.id, { skipped: 'error', error: err.message, at: Date.now() }, 2 * 60 * 60 * 1000); } catch {}
       }
     }
 

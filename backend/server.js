@@ -347,6 +347,46 @@ app.listen(PORT, '0.0.0.0', async () => {
   console.log(`Login: http://0.0.0.0:${PORT}/auth/google`);
   console.log(`Health: http://0.0.0.0:${PORT}/health`);
   console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n');
+  // Ensure label-config exists with sane defaults if missing
+  try {
+    const fs = require('fs');
+    const fsp = require('fs').promises;
+    const path = require('path');
+    const { JOB_LABELS } = require('./config/labels');
+    const dataDir = path.join(__dirname, './data');
+    const configPath = path.join(dataDir, 'label-config.json');
+
+    if (!fs.existsSync(dataDir)) {
+      await fsp.mkdir(dataDir, { recursive: true });
+    }
+
+    const ensureDefaultConfig = async () => {
+      const defaultConfig = {
+        labels: JOB_LABELS.reduce((acc, label) => {
+          const id = label.name.toLowerCase().replace(/[^a-z0-9]/g, '-');
+          acc[id] = {
+            enabled: true,
+            name: label.name,
+            description: label.description,
+            keywords: label.keywords || [],
+            senders: label.senders || [],
+            type: 'preset'
+          };
+          return acc;
+        }, {})
+      };
+      await fsp.writeFile(configPath, JSON.stringify(defaultConfig, null, 2));
+      console.log(`[init] Created default label config at ${configPath}`);
+    };
+
+    try {
+      await fsp.access(configPath, fs.constants.F_OK | fs.constants.R_OK | fs.constants.W_OK);
+    } catch {
+      await ensureDefaultConfig();
+    }
+  } catch (e) {
+    console.warn('[init] Failed ensuring label-config.json:', e.message);
+  }
   
   if (!process.env.GOOGLE_CLIENT_ID || process.env.GOOGLE_CLIENT_ID === 'your_client_id') {
     console.warn('⚠️  WARNING: GOOGLE_CLIENT_ID not configured in .env');

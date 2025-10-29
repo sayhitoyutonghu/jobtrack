@@ -30,10 +30,11 @@ class EmailClassifier {
 
     const {
       openaiApiKey = process.env.OPENAI_API_KEY,
-      anthropicApiKey = process.env.ANTHROPIC_API_KEY
+      anthropicApiKey = process.env.ANTHROPIC_API_KEY,
+      enableAI = true
     } = options;
 
-    if (openaiApiKey && openaiApiKey !== 'sk-your-key-here') {
+    if (enableAI && openaiApiKey && openaiApiKey !== 'sk-your-key-here') {
       try {
         const { OpenAI } = require('openai');
         this.openai = new OpenAI({ apiKey: openaiApiKey });
@@ -44,7 +45,7 @@ class EmailClassifier {
       }
     }
 
-    if (!this.useOpenAI && anthropicApiKey && anthropicApiKey !== 'sk-ant-your-key-here') {
+    if (enableAI && !this.useOpenAI && anthropicApiKey && anthropicApiKey !== 'sk-ant-your-key-here') {
       try {
         const Anthropic = require('@anthropic-ai/sdk');
         this.anthropic = new Anthropic({ apiKey: anthropicApiKey });
