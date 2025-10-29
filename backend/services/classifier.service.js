@@ -296,10 +296,13 @@ Respond with only one label (lowercase).`;
     const baseKeywords = [
       'application', 'interview', 'position', 'role', 'job',
       'recruiter', 'hiring', 'candidate', 'offer', 'career',
-      'opportunity', 'resume', 'cv', 'employment'
+      'opportunity', 'resume', 'cv', 'employment',
+      // common phrases we saw being skipped
+      'job alert', 'jobs for you', 'now hiring', 'application received',
+      'thank you for applying', 'application was viewed', 'your application was viewed'
     ];
 
-    const text = `${email.subject} ${email.snippet} ${email.from}`.toLowerCase();
+    const text = `${email.subject || ''} ${email.snippet || ''} ${email.from || ''} ${email.body || ''}`.toLowerCase();
     return baseKeywords.some(k => text.includes(k));
   }
 
@@ -330,6 +333,26 @@ Respond with only one label (lowercase).`;
 
     if (this.isOutboundJobApplication(email)) {
       return this.createResult('application', 'high', 'outbound-application');
+    }
+
+    // Phrase-based heuristics before AI (improves accuracy without cost)
+    const subject = (email.subject || '').toLowerCase();
+    const body = (email.body || '').toLowerCase();
+    const text = `${subject} ${body}`;
+
+    const phraseRules = [
+      { pattern: /(application (was )?received|thank you for applying|we received your application)/, category: 'application' },
+      { pattern: /(application was viewed|viewed your application|application reviewed)/, category: 'application' },
+      { pattern: /(job alert|jobs for you|now hiring|hiring in )/, category: 'application' },
+      { pattern: /(interview|schedule d?an interview|availability for interview|invite(d)? you to interview)/, category: 'interview' },
+      { pattern: /(offer|compensation|package|onboarding)/, category: 'offer' },
+      { pattern: /(reject|not move forward|no longer moving forward|decline your application)/, category: 'rejected' }
+    ];
+
+    for (const rule of phraseRules) {
+      if (rule.pattern.test(text)) {
+        return this.createResult(rule.category, 'high', 'rule-phrase');
+      }
     }
 
     // Fall back to AI classification
