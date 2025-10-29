@@ -3,6 +3,7 @@ const router = express.Router();
 const GmailService = require('../services/gmail.service');
 const ClassifierService = require('../services/classifier.service');
 const AILabelAnalyzerService = require('../services/ai-label-analyzer.service');
+const CustomLabelClassifier = require('../services/custom-label-classifier.service');
 const { JOB_LABELS } = require('../config/labels');
 const AutoScanService = require('../services/autoscan.service');
 
@@ -35,7 +36,7 @@ router.post('/setup', async (req, res) => {
  */
 router.post('/create-label', async (req, res) => {
   try {
-    const { name, description, color, icon } = req.body;
+    const { name, description, color, icon, keywords, senders } = req.body;
     
     if (!name) {
       return res.status(400).json({
@@ -51,6 +52,38 @@ router.post('/create-label', async (req, res) => {
       color,
       icon
     });
+    
+    // Save custom label rules to config
+    const fs = require('fs').promises;
+    const path = require('path');
+    const configFile = path.join(__dirname, '../data/label-config.json');
+    
+    try {
+      let config = { labels: {} };
+      try {
+        const data = await fs.readFile(configFile, 'utf8');
+        config = JSON.parse(data);
+      } catch (e) {
+        // File doesn't exist, start with empty config
+      }
+      
+      const labelId = label.id || label.name.toLowerCase().replace(/[^a-z0-9]/g, '-');
+      config.labels[labelId] = {
+        enabled: true,
+        name: name,
+        description: description || `Custom label: ${name}`,
+        keywords: keywords || [],
+        senders: senders || [],
+        type: 'custom',
+        color: color || { backgroundColor: '#4a86e8', textColor: '#ffffff' },
+        icon: icon || '📋'
+      };
+      
+      await fs.writeFile(configFile, JSON.stringify(config, null, 2));
+      console.log(`[gmail] Saved custom label rules for "${name}":`, config.labels[labelId]);
+    } catch (configError) {
+      console.warn('Failed to save custom label rules:', configError.message);
+    }
     
     res.json({
       success: true,
@@ -130,6 +163,7 @@ router.post('/scan', async (req, res) => {
 
     const gmailService = new GmailService(req.user.auth);
     const classifier = new ClassifierService(process.env.ANTHROPIC_API_KEY);
+    const customClassifier = new CustomLabelClassifier();
 
     console.log('📧 [scan] scanning for new emails...', {
       query,
@@ -152,7 +186,28 @@ router.post('/scan', async (req, res) => {
         continue;
       }
 
-      // Skip if not job-related
+      // First try custom label classification (for any email type)
+      const customResult = await customClassifier.classify(email);
+      if (customResult.success) {
+        const applied = await gmailService.applyLabelToThread(
+          email.threadId,
+          customResult.label,
+          false
+        );
+        
+        results.push({ 
+          id: email.id, 
+          subject: email.subject, 
+          label: customResult.label,
+          confidence: customResult.confidence,
+          method: customResult.method,
+          reason: customResult.reason
+        });
+        console.log(`✅ [scan] custom labeled ${email.id} -> ${customResult.label} (${customResult.reason})`);
+        continue;
+      }
+
+      // Then try job-related classification
       if (!classifier.isJobRelated(email)) {
         // Give more context: finance/receipt ignored
         const reason = classifier.isFinanceReceipt && classifier.isFinanceReceipt(email)

@@ -1,5 +1,6 @@
 const GmailService = require('./gmail.service');
 const ClassifierService = require('./classifier.service');
+const CustomLabelClassifier = require('./custom-label-classifier.service');
 
 class AutoScanService {
   constructor({ intervalMs = 300000, resolveSession }) { // 默认5分钟
@@ -33,19 +34,32 @@ class AutoScanService {
         
         const gmail = new GmailService(session.auth);
         const classifier = new ClassifierService(process.env.ANTHROPIC_API_KEY);
+        const customClassifier = new CustomLabelClassifier();
         const msgs = await gmail.scanNewEmails(query, maxResults);
         console.log(`[autoscan] tick session ${sessionId} -> ${msgs.length} messages`);
         
         for (const m of msgs) {
           try {
             const email = await gmail.getEmail(m.id);
+            
+            // First try custom label classification (for any email type)
+            const customResult = await customClassifier.classify(email);
+            if (customResult.success) {
+              await gmail.applyLabelToThread(email.threadId, customResult.label, false);
+              console.log(`[autoscan] custom labeled ${email.id} -> ${customResult.label} (${customResult.reason})`);
+              processedCount++;
+              await gmail.sleep(100);
+              continue;
+            }
+            
+            // Then try job-related classification
             if (!classifier.isJobRelated(email)) continue;
             
             const cls = await classifier.classify(email);
             if (!cls) continue;
             
             await gmail.applyLabelToThread(email.threadId, cls.label, false);
-            console.log(`[autoscan] labeled ${email.id} -> ${cls.label}`);
+            console.log(`[autoscan] job labeled ${email.id} -> ${cls.label}`);
             processedCount++;
             
             await gmail.sleep(100);
@@ -158,6 +172,7 @@ class AutoScanService {
       
       const gmail = new GmailService(session.auth);
       const classifier = new ClassifierService(process.env.ANTHROPIC_API_KEY);
+      const customClassifier = new CustomLabelClassifier();
       const msgs = await gmail.scanNewEmails(query, maxResults);
       
       let processedCount = 0;
@@ -170,9 +185,25 @@ class AutoScanService {
             console.log(`[autoscan] skipped ${m.id} (empty-body)`);
             continue;
           }
-          if (!email.body || email.body.length === 0) {
+          
+          // First try custom label classification (for any email type)
+          const customResult = await customClassifier.classify(email);
+          if (customResult.success) {
+            await gmail.applyLabelToThread(email.threadId, customResult.label, false);
+            processedCount++;
+            results.push({
+              id: email.id,
+              subject: email.subject,
+              label: customResult.label,
+              confidence: customResult.confidence,
+              method: customResult.method,
+              reason: customResult.reason
+            });
+            await gmail.sleep(100);
             continue;
           }
+          
+          // Then try job-related classification
           if (!classifier.isJobRelated(email)) continue;
           
           const cls = await classifier.classify(email);

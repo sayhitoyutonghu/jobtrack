@@ -228,7 +228,25 @@ const JobEmailCategorizationApp = () => {
       setCreateLabelLoading(true);
       setCreateLabelError(null);
       
-      const response = await gmailApi.createLabel(newLabel);
+      // Prepare label data with rules from AI analysis
+      const labelData = {
+        name: newLabel.name,
+        description: newLabel.description,
+        color: newLabel.color,
+        icon: newLabel.icon
+      };
+      
+      // Add keywords and senders from AI analysis if available
+      if (aiAnalysis) {
+        if (aiAnalysis.keywords && aiAnalysis.keywords.length > 0) {
+          labelData.keywords = aiAnalysis.keywords;
+        }
+        if (aiAnalysis.senders && aiAnalysis.senders.length > 0) {
+          labelData.senders = aiAnalysis.senders;
+        }
+      }
+      
+      const response = await gmailApi.createLabel(labelData);
       if (!response.success) {
         throw new Error(response.error || '创建自定义标签失败');
       }
@@ -242,7 +260,7 @@ const JobEmailCategorizationApp = () => {
       // Refresh labels list
       await loadLabels();
       
-      setScanResult({ message: `Custom label "${newLabel.name}" created successfully` });
+      setScanResult({ message: `Custom label "${newLabel.name}" created successfully with rules` });
     } catch (error) {
       console.error('Failed to create custom label:', error);
       setCreateLabelError(error.message);
