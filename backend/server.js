@@ -19,6 +19,7 @@ const { google } = require('googleapis');
 require('dotenv').config();
 const { saveSession, getSession } = require('./services/session.store');
 const AutoManagerService = require('./services/auto-manager.service');
+const OpenAI = require('openai');
 
 // Initialize Express application
 const app = express();
@@ -301,6 +302,25 @@ app.get('/', (req, res) => {
       }
     }
   });
+});
+
+// OpenAI diagnostics endpoint (no auth): verifies API key and quota quickly
+app.get('/diagnostics/openai', async (req, res) => {
+  try {
+    if (!process.env.OPENAI_API_KEY || process.env.OPENAI_API_KEY === 'sk-your-key-here') {
+      return res.status(400).json({ success: false, error: 'OPENAI_API_KEY not configured' });
+    }
+    const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+    const completion = await client.chat.completions.create({
+      model: process.env.OPENAI_MODEL || 'gpt-4o-mini',
+      messages: [{ role: 'user', content: 'ping' }],
+      max_tokens: 5
+    });
+    res.json({ success: true, reply: completion.choices[0]?.message?.content || '' });
+  } catch (error) {
+    console.error('[diagnostics][openai] error:', error.message);
+    res.status(500).json({ success: false, error: error.message });
+  }
 });
 
 // ============================================

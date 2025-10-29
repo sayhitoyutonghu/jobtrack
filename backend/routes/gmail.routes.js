@@ -178,82 +178,100 @@ router.post('/scan', async (req, res) => {
     const results = [];
     
     for (const message of messages) {
-      const email = await gmailService.getEmail(message.id);
-      
-      if (!email.body || email.body.length === 0) {
-        results.push({ id: email.id, subject: email.subject, skipped: 'empty-body' });
-        console.log(`↪️  [scan] skipped ${email.id} (empty-body)`);
-        continue;
-      }
-
-      // First try custom label classification (for any email type)
-      const customResult = await customClassifier.classify(email);
-      if (customResult.success) {
-        const applied = await gmailService.applyLabelToThread(
-          email.threadId,
-          customResult.label,
-          false
-        );
+      try {
+        const email = await gmailService.getEmail(message.id);
         
-        results.push({ 
-          id: email.id, 
-          subject: email.subject, 
-          label: customResult.label,
-          confidence: customResult.confidence,
-          method: customResult.method,
-          reason: customResult.reason
+        if (!email.body || email.body.length === 0) {
+          results.push({ id: email.id, subject: email.subject, skipped: 'empty-body' });
+          console.log(`↪️  [scan] skipped ${email.id} (empty-body)`);
+          continue;
+        }
+
+        // First try custom label classification (for any email type)
+        const customResult = await customClassifier.classify(email);
+        if (customResult && customResult.success) {
+          try {
+            await gmailService.applyLabelToThread(
+              email.threadId,
+              customResult.label,
+              false
+            );
+          } catch (e) {
+            console.error(`[scan] apply custom label failed for ${email.id}:`, e.message);
+          }
+          
+          results.push({ 
+            id: email.id, 
+            subject: email.subject, 
+            label: customResult.label,
+            confidence: customResult.confidence,
+            method: customResult.method,
+            reason: customResult.reason
+          });
+          console.log(`✅ [scan] custom labeled ${email.id} -> ${customResult.label} (${customResult.reason})`);
+          continue;
+        }
+
+        // Then try job-related classification
+        if (!classifier.isJobRelated(email)) {
+          // Give more context: finance/receipt ignored
+          const reason = classifier.isFinanceReceipt && classifier.isFinanceReceipt(email)
+            ? 'ignored-finance-receipt'
+            : 'not-job-related';
+          results.push({ id: email.id, subject: email.subject, skipped: reason });
+          console.log(`↪️  [scan] skipped ${email.id} (${reason})`);
+          continue;
+        }
+
+        const classification = await classifier.classify(email);
+        if (!classification) {
+          results.push({ id: email.id, subject: email.subject, skipped: 'no-match' });
+          console.log(`↪️  [scan] skipped ${email.id} (no-match)`);
+          continue;
+        }
+
+        // Apply label to the whole thread instead of just this message
+        try {
+          await gmailService.applyLabelToThread(
+            email.threadId,
+            classification.label,
+            classification.config.moveToFolder
+          );
+        } catch (e) {
+          console.error(`[scan] apply label failed for ${email.id}:`, e.message);
+        }
+
+        // Debug: fetch labels applied to this thread for visibility verification
+        let threadLabels = [];
+        try {
+          threadLabels = await gmailService.getThreadLabelNames(email.threadId);
+        } catch (e) {
+          console.warn(`[scan] fetch thread labels failed for ${email.id}:`, e.message);
+        }
+
+        // No conflict removal needed since Finance/Receipt is disabled
+        const removedLabels = [];
+
+        results.push({
+          id: email.id,
+          threadId: email.threadId,
+          subject: email.subject,
+          from: email.from,
+          label: classification.label,
+          confidence: classification.confidence,
+          method: classification.method,
+          movedToFolder: classification.config.moveToFolder,
+          threadLabels,
+          removedLabels
         });
-        console.log(`✅ [scan] custom labeled ${email.id} -> ${customResult.label} (${customResult.reason})`);
-        continue;
+
+        // Rate limiting
+        console.log(`✅ [scan] labeled ${email.id} as ${classification.label} via ${classification.method}`);
+        await gmailService.sleep(100);
+      } catch (err) {
+        console.error(`❌ [scan] failed processing message ${message.id}:`, err.message);
+        results.push({ id: message.id, skipped: 'error', error: err.message });
       }
-
-      // Then try job-related classification
-      if (!classifier.isJobRelated(email)) {
-        // Give more context: finance/receipt ignored
-        const reason = classifier.isFinanceReceipt && classifier.isFinanceReceipt(email)
-          ? 'ignored-finance-receipt'
-          : 'not-job-related';
-        results.push({ id: email.id, subject: email.subject, skipped: reason });
-        console.log(`↪️  [scan] skipped ${email.id} (${reason})`);
-        continue;
-      }
-
-      const classification = await classifier.classify(email);
-      if (!classification) {
-        results.push({ id: email.id, subject: email.subject, skipped: 'no-match' });
-        console.log(`↪️  [scan] skipped ${email.id} (no-match)`);
-        continue;
-      }
-
-      // Apply label to the whole thread instead of just this message
-      const applied = await gmailService.applyLabelToThread(
-        email.threadId,
-        classification.label,
-        classification.config.moveToFolder
-      );
-
-      // Debug: fetch labels applied to this thread for visibility verification
-      const threadLabels = await gmailService.getThreadLabelNames(email.threadId);
-
-      // No conflict removal needed since Finance/Receipt is disabled
-      const removedLabels = [];
-
-      results.push({
-        id: email.id,
-        threadId: email.threadId,
-        subject: email.subject,
-        from: email.from,
-        label: classification.label,
-        confidence: classification.confidence,
-        method: classification.method,
-        movedToFolder: classification.config.moveToFolder,
-        threadLabels,
-        removedLabels
-      });
-
-      // Rate limiting
-      console.log(`✅ [scan] labeled ${email.id} as ${classification.label} via ${classification.method}`);
-      await gmailService.sleep(100);
     }
 
     const stats = {
@@ -275,6 +293,19 @@ router.post('/scan', async (req, res) => {
       success: false,
       error: error.message 
     });
+  }
+});
+
+// Diagnostics: verify Gmail API permission by listing labels
+router.get('/diagnostics', async (req, res) => {
+  try {
+    const gmailService = new GmailService(req.user.auth);
+    const gmail = gmailService.gmail;
+    const labels = await gmail.users.labels.list({ userId: 'me' });
+    res.json({ success: true, labelsCount: (labels.data.labels || []).length });
+  } catch (error) {
+    console.error('[diagnostics][gmail] error:', error.message);
+    res.status(500).json({ success: false, error: error.message });
   }
 });
 
