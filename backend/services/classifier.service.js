@@ -15,34 +15,86 @@ const CATEGORY_MAP = {
   ghost: 'Ghost'
 };
 
-const OPENAI_MODEL = process.env.OPENAI_MODEL || 'gpt-4-1106-preview';
+const GEMINI_MODEL = process.env.GEMINI_MODEL || 'gemini-1.5-flash';
 const ANTHROPIC_MODEL = process.env.ANTHROPIC_MODEL || 'claude-3-opus-20240229';
-const OPENAI_TEMPERATURE = Number.isFinite(Number(process.env.OPENAI_TEMPERATURE))
-  ? Number(process.env.OPENAI_TEMPERATURE)
-  : 0;
+const GEMINI_TEMPERATURE = Number.isFinite(Number(process.env.GEMINI_TEMPERATURE))
+  ? Number(process.env.GEMINI_TEMPERATURE)
+  : 0.1;
+
+// System Prompt for improved accuracy in distinguishing 'interview' from 'confirmation'
+const SYSTEM_PROMPT = `你是一个专业的招聘邮件分析助手。你的任务是从邮件内容中提取招聘状态。
+
+请严格遵循以下逻辑判断：
+
+1. **APPLIED (已申请)**: 仅仅是系统自动回复 "We received your application" 或 "Thanks for applying"。即使邮件里提到了 "interview" 这个词（例如 "timeline for interview"），只要没有明确邀请你聊天，都属于此项。
+
+2. **INTERVIEW (面试)**: 明确的邀请。关键词包括 "schedule a time", "availability", "chat", "phone screen", "technical round"。
+
+3. **REJECTED (拒绝)**: 包含 "unfortunately", "pursue other candidates", "not moving forward"。
+
+4. **OFFER (录用)**: 包含 "offer letter", "congratulations", "compensation"。
+
+请输出纯 JSON 格式，包含两个字段：
+
+- "status": 上述四个状态之一
+
+- "confidence": 你的判断确信度 (Low/Medium/High)
+
+以下是供你学习的案例 (Few-Shot Examples):
+
+案例 1 (易错 - 只是确认信):
+
+用户输入: "Subject: Application Received. Body: Thanks for applying. We will review your resume and if you are a match for the interview, we will contact you."
+
+你的输出: { "status": "APPLIED", "confidence": "High" }
+
+案例 2 (面试邀请):
+
+用户输入: "Subject: Chat regarding Designer role? Body: Hi, I'd love to chat about your background. Are you free next Tuesday?"
+
+你的输出: { "status": "INTERVIEW", "confidence": "High" }
+
+案例 3 (拒绝):
+
+用户输入: "Subject: Update on your application. Body: Thank you for your interest. Unfortunately, we have decided to move forward with other candidates."
+
+你的输出: { "status": "REJECTED", "confidence": "High" }`;
 
 class EmailClassifier {
   constructor(options = {}) {
-    this.useOpenAI = false;
+    this.useGemini = false;
     this.useAnthropic = false;
 
     const {
-      openaiApiKey = process.env.OPENAI_API_KEY,
+      geminiApiKey = process.env.GOOGLE_GEMINI_API_KEY || process.env.GEMINI_API_KEY,
       anthropicApiKey = process.env.ANTHROPIC_API_KEY
     } = options;
 
-    if (openaiApiKey && openaiApiKey !== 'sk-your-key-here') {
+    // Initialize Google Gemini API
+    if (geminiApiKey && geminiApiKey !== 'your-api-key-here' && geminiApiKey !== '') {
       try {
-        const { OpenAI } = require('openai');
-        this.openai = new OpenAI({ apiKey: openaiApiKey });
-        this.useOpenAI = true;
-        console.log('✓ OpenAI classification enabled');
+        const { GoogleGenerativeAI } = require('@google/generative-ai');
+        this.genAI = new GoogleGenerativeAI(geminiApiKey);
+        // Initialize model with JSON response format
+        this.model = this.genAI.getGenerativeModel({ 
+          model: GEMINI_MODEL,
+          generationConfig: {
+            temperature: GEMINI_TEMPERATURE,
+            responseMimeType: 'application/json' // Ensure JSON response format
+          }
+        });
+        this.useGemini = true;
+        console.log(`✓ Google Gemini classification enabled (model: ${GEMINI_MODEL})`);
       } catch (error) {
-        console.error('⚠ Failed to initialize OpenAI SDK:', error.message);
+        console.error('⚠ Failed to initialize Google Gemini SDK:', error.message);
+        if (error.stack) {
+          console.error('Error stack:', error.stack);
+        }
       }
     }
 
-    if (!this.useOpenAI && anthropicApiKey && anthropicApiKey !== 'sk-ant-your-key-here') {
+    // Fallback to Anthropic if Gemini is not available
+    if (!this.useGemini && anthropicApiKey && anthropicApiKey !== 'sk-ant-your-key-here') {
       try {
         const Anthropic = require('@anthropic-ai/sdk');
         this.anthropic = new Anthropic({ apiKey: anthropicApiKey });
@@ -53,11 +105,28 @@ class EmailClassifier {
       }
     }
 
-    if (!this.useOpenAI && !this.useAnthropic) {
+    if (!this.useGemini && !this.useAnthropic) {
       console.log('⚠ AI disabled (no valid API key provided)');
+      console.log('   Please set GOOGLE_GEMINI_API_KEY or ANTHROPIC_API_KEY environment variable');
     }
   }
 
+  /**
+   * Build user prompt for AI classification (Gemini/Anthropic)
+   * This is used for the 30% AI processing part
+   */
+  buildUserPrompt(email) {
+    const safe = (value) => (value || '').toString().trim();
+    const body = safe(email.body);
+    const emailSnippet = body.length > 6000 ? `${body.slice(0, 6000)}...` : body;
+    const emailSubject = safe(email.subject);
+
+    return `Subject: ${emailSubject}\nBody: ${emailSnippet}`;
+  }
+
+  /**
+   * Legacy prompt builder (kept for Anthropic compatibility)
+   */
   buildPrompt(email) {
     const safe = (value) => (value || '').toString().trim();
     const body = safe(email.body);
@@ -113,6 +182,62 @@ Body: "${trimmedBody}"
 Respond with only one label (lowercase).`;
   }
 
+  /**
+   * Parse AI response status and map to internal category
+   * Maps: APPLIED -> application, INTERVIEW -> interview, REJECTED -> rejected, OFFER -> offer
+   */
+  parseAIStatus(aiResponse) {
+    if (!aiResponse) return null;
+
+    try {
+      // Handle JSON string response
+      let parsed;
+      if (typeof aiResponse === 'string') {
+        parsed = JSON.parse(aiResponse);
+      } else if (typeof aiResponse === 'object') {
+        parsed = aiResponse;
+      } else {
+        return null;
+      }
+
+      const status = parsed.status?.toUpperCase();
+      const confidence = parsed.confidence || 'Medium';
+
+      // Map AI status to internal category
+      const statusMap = {
+        'APPLIED': 'application',
+        'INTERVIEW': 'interview',
+        'REJECTED': 'rejected',
+        'OFFER': 'offer'
+      };
+
+      const category = statusMap[status];
+      if (!category) {
+        console.warn('[classifier] Invalid AI status:', status);
+        return null;
+      }
+
+      // Map confidence levels
+      const confidenceMap = {
+        'Low': 'low',
+        'Medium': 'medium',
+        'High': 'high'
+      };
+
+      return {
+        category,
+        confidence: confidenceMap[confidence] || 'medium',
+        rawStatus: status
+      };
+    } catch (error) {
+      console.warn('[classifier] Failed to parse AI response:', error.message);
+      return null;
+    }
+  }
+
+  /**
+   * Legacy category parser (kept for backward compatibility)
+   */
   parseCategory(rawText) {
     if (!rawText) return null;
 
@@ -148,31 +273,98 @@ Respond with only one label (lowercase).`;
     };
   }
 
-  async classifyWithOpenAI(prompt) {
-    if (!this.openai) return null;
+  /**
+   * Classify email using Google Gemini API with optimized prompt and JSON response format
+   * This is the 30% AI processing part that has been optimized
+   */
+  async classifyWithOpenAI(email) {
+    // Note: Method name kept as classifyWithOpenAI for backward compatibility
+    // but now uses Google Gemini API
+    if (!this.useGemini || !this.model) {
+      console.warn('[classifier][gemini] Gemini API not initialized');
+      return null;
+    }
 
     try {
-      const completion = await this.openai.chat.completions.create({
-        model: OPENAI_MODEL,
-        messages: [{ role: 'user', content: prompt }],
-        max_tokens: 10,
-        temperature: OPENAI_TEMPERATURE
-      });
+      const userPrompt = this.buildUserPrompt(email);
+      
+      // Combine system prompt and user prompt for Gemini
+      // Gemini doesn't have separate system/user roles, so we combine them
+      const fullPrompt = `${SYSTEM_PROMPT}\n\n${userPrompt}`;
 
-      const category = this.parseCategory(completion.choices[0]?.message?.content);
-      if (!category) {
-        console.warn('[classifier][openai] Invalid category:', completion.choices[0]?.message?.content);
+      const result = await this.model.generateContent(fullPrompt);
+      const response = await result.response;
+      
+      if (!response) {
+        console.warn('[classifier][gemini] Empty response from API');
         return null;
       }
 
-      return this.createResult(category, 'medium', 'openai-ai', {
-        rawResponse: completion
+      // Get the JSON text from response
+      let content;
+      try {
+        content = response.text();
+      } catch (textError) {
+        console.error('[classifier][gemini] Failed to extract text from response:', textError.message);
+        // Try alternative method
+        const candidates = response.candidates;
+        if (candidates && candidates.length > 0 && candidates[0].content) {
+          const parts = candidates[0].content.parts;
+          if (parts && parts.length > 0 && parts[0].text) {
+            content = parts[0].text;
+          }
+        }
+        
+        if (!content) {
+          console.error('[classifier][gemini] Could not extract content from response');
+          console.error('[classifier][gemini] Response structure:', JSON.stringify(response, null, 2));
+          return null;
+        }
+      }
+
+      if (!content || content.trim().length === 0) {
+        console.warn('[classifier][gemini] Empty content in response');
+        return null;
+      }
+
+      // Parse JSON response
+      const parsed = this.parseAIStatus(content);
+      if (!parsed) {
+        console.warn('[classifier][gemini] Failed to parse response');
+        console.warn('[classifier][gemini] Raw content:', content);
+        return null;
+      }
+
+      return this.createResult(parsed.category, parsed.confidence, 'gemini-ai', {
+        rawResponse: response,
+        rawStatus: parsed.rawStatus,
+        rawContent: content
       });
     } catch (error) {
-      console.error('OpenAI classification failed:', error.message);
+      // Enhanced error handling
+      if (error.message) {
+        console.error('[classifier][gemini] Classification failed:', error.message);
+      } else {
+        console.error('[classifier][gemini] Classification failed with unknown error:', error);
+      }
+      
+      // Log additional error details if available
+      if (error.stack) {
+        console.error('[classifier][gemini] Error stack:', error.stack);
+      }
+      
+      // Handle specific Gemini API errors
+      if (error.status) {
+        console.error('[classifier][gemini] API status code:', error.status);
+      }
+      if (error.statusText) {
+        console.error('[classifier][gemini] API status text:', error.statusText);
+      }
+      
       return null;
     }
   }
+
 
   async classifyWithAnthropic(prompt) {
     if (!this.anthropic) return null;
@@ -307,22 +499,26 @@ Respond with only one label (lowercase).`;
       return this.createResult('application', 'high', 'outbound-application');
     }
 
-    // Fall back to AI classification
-    if (this.useOpenAI || this.useAnthropic) {
+    // Fall back to AI classification (30% AI processing part - optimized)
+    if (this.useGemini || this.useAnthropic) {
       try {
-        const prompt = this.buildPrompt(email);
-
-        if (this.useOpenAI) {
-          const result = await this.classifyWithOpenAI(prompt);
+        if (this.useGemini) {
+          // Use optimized Google Gemini classification with new System Prompt
+          const result = await this.classifyWithOpenAI(email);
           if (result) return result;
         }
 
         if (this.useAnthropic) {
+          // Keep legacy prompt for Anthropic (backward compatibility)
+          const prompt = this.buildPrompt(email);
           const result = await this.classifyWithAnthropic(prompt);
           if (result) return result;
         }
       } catch (error) {
-        console.error('AI classification failed:', error.message);
+        console.error('[classifier] AI classification failed:', error.message);
+        if (error.stack) {
+          console.error('[classifier] Error stack:', error.stack);
+        }
       }
     }
 
