@@ -42,6 +42,7 @@ interface Job {
     role: string;
     salary: string;
     status: Status;
+    location?: string;
     description?: string;
     date?: string;
     emailSnippet?: string;
@@ -259,7 +260,7 @@ const TrashBin = () => {
 };
 
 /**
- * Job Details Modal
+ * Job Details Modal - Inspired by Teal design
  */
 const JobDetailsModal = ({ job, onClose }: { job: Job; onClose: () => void }) => {
     if (!job) return null;
@@ -267,7 +268,7 @@ const JobDetailsModal = ({ job, onClose }: { job: Job; onClose: () => void }) =>
     return (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm" onClick={onClose}>
             <div
-                className="bg-white border-4 border-black shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] w-full max-w-2xl max-h-[90vh] overflow-y-auto p-6 md:p-8 relative"
+                className="bg-white border-4 border-black shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] w-full max-w-3xl max-h-[90vh] overflow-y-auto p-6 md:p-8 relative"
                 onClick={(e) => e.stopPropagation()}
             >
                 <button
@@ -278,19 +279,36 @@ const JobDetailsModal = ({ job, onClose }: { job: Job; onClose: () => void }) =>
                     <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
                 </button>
 
-                <div className="mb-6">
-                    <div className="inline-block bg-black text-white px-3 py-1 text-sm font-mono mb-2">
+                {/* Header Section */}
+                <div className="mb-8">
+                    <div className="inline-block bg-black text-white px-3 py-1 text-sm font-mono mb-4">
                         ID: {job.id}
                     </div>
-                    <h2 className="text-3xl md:text-4xl font-black uppercase tracking-tighter mb-1">{job.company}</h2>
-                    <h3 className="text-xl font-mono text-zinc-600 border-b-2 border-black pb-4 mb-4">{job.role}</h3>
+                    <h2 className="text-4xl md:text-5xl font-black uppercase tracking-tighter mb-2">{job.company}</h2>
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+                {/* Three-column grid: Position, Company, Location */}
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
+                    <div className="bg-blue-50 p-4 border-2 border-black">
+                        <span className="block text-xs font-bold text-blue-600 uppercase mb-2">Job Position</span>
+                        <span className="text-lg font-bold text-black">{job.role}</span>
+                    </div>
+                    <div className="bg-green-50 p-4 border-2 border-black">
+                        <span className="block text-xs font-bold text-green-600 uppercase mb-2">Company</span>
+                        <span className="text-lg font-bold text-black">{job.company}</span>
+                    </div>
+                    <div className="bg-purple-50 p-4 border-2 border-black">
+                        <span className="block text-xs font-bold text-purple-600 uppercase mb-2">Location</span>
+                        <span className="text-lg font-bold text-black">{job.location || "Unknown"}</span>
+                    </div>
+                </div>
+
+                {/* Status and Salary */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
                     <div className="bg-zinc-50 p-4 border-2 border-black">
-                        <span className="block text-xs font-bold text-zinc-400 uppercase mb-1">Status</span>
+                        <span className="block text-xs font-bold text-zinc-400 uppercase mb-2">Status</span>
                         <span className={cn(
-                            "inline-block px-2 py-1 text-sm font-bold border border-black",
+                            "inline-block px-3 py-1.5 text-sm font-bold border-2 border-black",
                             job.status === 'Applied' && "bg-blue-100 text-blue-800",
                             job.status === 'Interviewing' && "bg-orange-100 text-orange-800",
                             job.status === 'Offer' && "bg-green-100 text-green-800",
@@ -300,16 +318,17 @@ const JobDetailsModal = ({ job, onClose }: { job: Job; onClose: () => void }) =>
                         </span>
                     </div>
                     <div className="bg-zinc-50 p-4 border-2 border-black">
-                        <span className="block text-xs font-bold text-zinc-400 uppercase mb-1">Salary</span>
+                        <span className="block text-xs font-bold text-zinc-400 uppercase mb-2">Salary</span>
                         <span className="text-lg font-bold">{job.salary}</span>
                     </div>
                 </div>
 
+                {/* Email Content */}
                 <div className="space-y-6">
                     <div>
-                        <h4 className="font-bold uppercase tracking-wider mb-2 flex items-center gap-2">
+                        <h4 className="font-bold uppercase tracking-wider mb-3 flex items-center gap-2 text-sm">
                             <span className="w-2 h-2 bg-black"></span>
-                            Email Snippet
+                            EMAIL SNIPPET
                         </h4>
                         <div className="bg-zinc-100 p-4 border-2 border-black font-mono text-sm leading-relaxed">
                             {job.emailSnippet || "No email content available."}
@@ -318,9 +337,9 @@ const JobDetailsModal = ({ job, onClose }: { job: Job; onClose: () => void }) =>
 
                     {job.description && (
                         <div>
-                            <h4 className="font-bold uppercase tracking-wider mb-2 flex items-center gap-2">
+                            <h4 className="font-bold uppercase tracking-wider mb-3 flex items-center gap-2 text-sm">
                                 <span className="w-2 h-2 bg-black"></span>
-                                Description
+                                DESCRIPTION
                             </h4>
                             <p className="text-zinc-700 leading-relaxed">
                                 {job.description}
@@ -329,6 +348,7 @@ const JobDetailsModal = ({ job, onClose }: { job: Job; onClose: () => void }) =>
                     )}
                 </div>
 
+                {/* Action Buttons */}
                 <div className="mt-8 pt-6 border-t-2 border-black flex justify-end gap-4">
                     <button onClick={onClose} className="px-6 py-2 border-2 border-black font-bold hover:bg-zinc-100 transition-colors">
                         CLOSE
@@ -347,26 +367,75 @@ const JobDetailsModal = ({ job, onClose }: { job: Job; onClose: () => void }) =>
  */
 // Helper functions for Gmail data conversion
 function extractCompany(subject: string, from: string): string {
-    // Try to extract company from subject
-    const subjectMatch = subject.match(/(?:from|at|@)\s+([A-Z][a-zA-Z\s&]+?)(?:\s|$|\||,)/i);
-    if (subjectMatch) return subjectMatch[1].trim();
+    // Common job email patterns
+    const patterns = [
+        /(?:from|at|@|with)\s+([A-Z][a-zA-Z\s&.]+?)(?:\s+(?:for|regarding|re:|\||,|$))/i,
+        /([A-Z][a-zA-Z\s&.]+?)\s+(?:job|position|role|opportunity|application)/i,
+        /^([A-Z][a-zA-Z\s&.]+?)\s+-/,  // "Company - Job Title" format
+    ];
 
-    // Extract from email domain
+    for (const pattern of patterns) {
+        const match = subject.match(pattern);
+        if (match && match[1]) {
+            const company = match[1].trim();
+            // Filter out common non-company words
+            if (!['New', 'Your', 'Job', 'Application', 'Interview', 'Thank'].includes(company)) {
+                return company;
+            }
+        }
+    }
+
+    // Extract from email domain as fallback
     const fromMatch = from.match(/@([a-zA-Z0-9-]+)\./);
     if (fromMatch) {
         const domain = fromMatch[1];
+        // Capitalize first letter
         return domain.charAt(0).toUpperCase() + domain.slice(1);
     }
 
-    return "Unknown Company";
+    return "Unknown";
 }
 
 function extractRole(subject: string): string {
-    const roleKeywords = ["Engineer", "Developer", "Designer", "Manager", "Analyst", "Scientist", "Architect"];
+    // Common role patterns
+    const rolePatterns = [
+        /(?:for|as|position:|role:)\s+([A-Z][a-zA-Z\s]+?)(?:\s+(?:at|with|\||,|$))/i,
+        /(Software Engineer|Frontend Engineer|Backend Engineer|Full Stack|Product Manager|Designer|Data Scientist|DevOps|QA Engineer|Marketing Manager)/i,
+    ];
+
+    for (const pattern of rolePatterns) {
+        const match = subject.match(pattern);
+        if (match && match[1]) return match[1].trim();
+    }
+
+    // Fallback: look for common role keywords
+    const roleKeywords = [
+        "Engineer", "Developer", "Designer", "Manager", "Analyst",
+        "Scientist", "Architect", "Director", "Lead", "Specialist"
+    ];
     for (const keyword of roleKeywords) {
         if (subject.toLowerCase().includes(keyword.toLowerCase())) return keyword;
     }
+
     return "Position";
+}
+
+function extractLocation(subject: string, body: string): string {
+    const text = subject + " " + body;
+
+    // Common location patterns
+    const locationPatterns = [
+        /(?:in|at|location:|based in)\s+([A-Z][a-zA-Z\s]+?,\s*[A-Z]{2})/i,  // "San Francisco, CA"
+        /(?:in|at|location:|based in)\s+(New York|San Francisco|Los Angeles|Seattle|Austin|Boston|Chicago|Remote)/i,
+        /\b(Remote|Hybrid|On-site)\b/i,
+    ];
+
+    for (const pattern of locationPatterns) {
+        const match = text.match(pattern);
+        if (match && match[1]) return match[1].trim();
+    }
+
+    return "Unknown";
 }
 
 function mapLabelToStatus(label: string): Status {
@@ -415,6 +484,7 @@ export default function JobTrackBoard() {
                         role: extractRole(r.subject || ""),
                         salary: "Unknown",
                         status: mapLabelToStatus(r.label),
+                        location: extractLocation(r.subject || "", ""),
                         description: r.subject,
                         date: new Date().toISOString().split('T')[0],
                         emailSnippet: r.subject || "No subject"
@@ -485,6 +555,7 @@ export default function JobTrackBoard() {
                             role: extractRole(r.subject || ""),
                             salary: "Unknown",
                             status: mapLabelToStatus(r.label),
+                            location: extractLocation(r.subject || "", ""),
                             description: r.subject,
                             date: new Date().toISOString().split('T')[0],
                             emailSnippet: r.subject || "No subject"
