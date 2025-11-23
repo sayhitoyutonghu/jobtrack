@@ -262,7 +262,7 @@ const TrashBin = () => {
 /**
  * Job Details Modal - Inspired by Teal design
  */
-const JobDetailsModal = ({ job, onClose }: { job: Job; onClose: () => void }) => {
+const JobDetailsModal = ({ job, onClose, onDelete }: { job: Job; onClose: () => void; onDelete: (jobId: string) => void }) => {
     if (!job) return null;
 
     return (
@@ -354,8 +354,16 @@ const JobDetailsModal = ({ job, onClose }: { job: Job; onClose: () => void }) =>
 
                 {/* Action Buttons */}
                 <div className="mt-8 pt-6 border-t-2 border-black flex justify-end gap-4">
-                    <button onClick={onClose} className="px-6 py-2 border-2 border-black font-bold hover:bg-zinc-100 transition-colors">
-                        CLOSE
+                    <button
+                        onClick={() => {
+                            // Delete the job (same as dragging to trash)
+                            onDelete(job.id);
+                            onClose();
+                        }}
+                        className="px-6 py-2 border-2 border-red-600 text-red-600 font-bold hover:bg-red-600 hover:text-white transition-colors flex items-center gap-2"
+                    >
+                        <span>🗑️</span>
+                        DELETE
                     </button>
                     <button className="px-6 py-2 bg-black text-white border-2 border-black font-bold hover:bg-zinc-800 transition-colors shadow-[4px_4px_0px_0px_rgba(0,0,0,0.2)] hover:translate-y-0.5 hover:shadow-[2px_2px_0px_0px_rgba(0,0,0,0.2)]">
                         OPEN IN GMAIL
@@ -757,8 +765,11 @@ export default function JobTrackBoard() {
 
             {/* Job Details Modal */}
             {selectedJob && (
-                <JobDetailsModal job={selectedJob} onClose={() => setSelectedJob(null)} />
-            )}
+                <JobDetailsModal
+                    job={selectedJob}
+                    onClose={() => setSelectedJob(null)}
+                    onDelete={(jobId) => setJobs(prevJobs => prevJobs.filter(j => j.id !== jobId))}
+                />)}
 
             {/* Toast Notification */}
             {scanMessage && (
