@@ -403,7 +403,7 @@ export default function JobTrackBoard() {
             // Use gmailApi which handles authentication headers automatically
             const data = await gmailApi.scanEmails({
                 maxResults: 50,
-                query: "is:unread newer_than:7d"
+                query: "newer_than:7d" // Scan all emails from last 7 days, not just unread
             });
 
             if (data.success && data.results) {
@@ -472,8 +472,8 @@ export default function JobTrackBoard() {
 
                 // Fetch recent labeled emails using gmailApi
                 const data = await gmailApi.scanEmails({
-                    maxResults: 100,
-                    query: "newer_than:30d"
+                    maxResults: 50,
+                    query: "newer_than:7d" // Reduced from 30d to 7d for faster loading
                 });
 
                 if (data.success && data.results) {
