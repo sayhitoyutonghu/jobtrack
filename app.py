@@ -179,7 +179,7 @@ if __name__ == '__main__':
     print("\n" + "="*50)
     print("🚀 Email Classification API Server")
     print("="*50)
-    print("Server running on: http://localhost:5000")
+    print("Server running on: http://localhost:5001")
     print("\nAvailable endpoints:")
     print("  GET  /health          - Health check")
     print("  GET  /categories      - Get all categories")
