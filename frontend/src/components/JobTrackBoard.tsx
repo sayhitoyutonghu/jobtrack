@@ -50,12 +50,12 @@ interface Job {
 
 // --- Mock Data (Fallback) ---
 const FALLBACK_DATA: Job[] = [
-    { id: "1", company: "Google", role: "Frontend Engineer", salary: "$180k", status: "Applied", description: "Working on the Google Cloud Console team.", date: "2023-10-01", emailSnippet: "Thank you for your application..." },
-    { id: "2", company: "Spotify", role: "UI Designer", salary: "$140k", status: "Applied", description: "Design system team.", date: "2023-10-05", emailSnippet: "We have received your application..." },
-    { id: "3", company: "Stripe", role: "Fullstack Dev", salary: "$200k", status: "Interviewing", description: "Payments infrastructure.", date: "2023-10-10", emailSnippet: "We'd like to schedule a chat..." },
-    { id: "4", company: "Linear", role: "Product Engineer", salary: "$170k", status: "Interviewing", description: "Building the issue tracker.", date: "2023-10-12", emailSnippet: "Next steps for your application..." },
-    { id: "5", company: "Vercel", role: "DevRel", salary: "$160k", status: "Offer", description: "Developer Relations for Next.js.", date: "2023-10-15", emailSnippet: "Congratulations! We are pleased to offer..." },
-    { id: "6", company: "Oracle", role: "Java Dev", salary: "$120k", status: "Rejected", description: "Legacy systems maintenance.", date: "2023-09-20", emailSnippet: "Thank you for your interest, but..." },
+    { id: "1", company: "Google", role: "Frontend Engineer", salary: "$180k", status: "Applied", location: "Mountain View, CA", description: "Working on the Google Cloud Console team.", date: "2023-10-01", emailSnippet: "Thank you for your application..." },
+    { id: "2", company: "Spotify", role: "UI Designer", salary: "$140k", status: "Applied", location: "Remote", description: "Design system team.", date: "2023-10-05", emailSnippet: "We have received your application..." },
+    { id: "3", company: "Stripe", role: "Fullstack Dev", salary: "$200k", status: "Interviewing", location: "San Francisco, CA", description: "Payments infrastructure.", date: "2023-10-10", emailSnippet: "We'd like to schedule a chat..." },
+    { id: "4", company: "Linear", role: "Product Engineer", salary: "$170k", status: "Interviewing", location: "Remote", description: "Building the issue tracker.", date: "2023-10-12", emailSnippet: "Next steps for your application..." },
+    { id: "5", company: "Vercel", role: "DevRel", salary: "$160k", status: "Offer", location: "Remote", description: "Developer Relations for Next.js.", date: "2023-10-15", emailSnippet: "Congratulations! We are pleased to offer..." },
+    { id: "6", company: "Oracle", role: "Java Dev", salary: "$120k", status: "Rejected", location: "Redwood City, CA", description: "Legacy systems maintenance.", date: "2023-09-20", emailSnippet: "Thank you for your interest, but..." },
 ];
 
 const COLUMNS: { id: Status; title: string; color: string; borderColor: string }[] = [
@@ -282,7 +282,11 @@ const JobDetailsModal = ({ job, onClose }: { job: Job; onClose: () => void }) =>
                 {/* Header Section */}
                 <div className="mb-8">
                     <div className="inline-block bg-black text-white px-3 py-1 text-sm font-mono mb-4">
-                        ID: {job.id}
+                        {job.date ? new Date(job.date).toLocaleDateString('en-US', {
+                            year: 'numeric',
+                            month: 'short',
+                            day: 'numeric'
+                        }) : 'Date Unknown'}
                     </div>
                     <h2 className="text-4xl md:text-5xl font-black uppercase tracking-tighter mb-2">{job.company}</h2>
                 </div>
