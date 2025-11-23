@@ -124,7 +124,7 @@ const JobEmailCategorizationApp = () => {
   };
 
   return (
-    <div className="app-shell flex h-screen bg-zinc-50 font-sans text-zinc-900">
+    <div className="app-shell flex w-screen h-screen bg-zinc-50 font-sans text-zinc-900 overflow-hidden">
       {/* Sidebar */}
       <aside className="w-64 bg-white border-r border-zinc-200 flex flex-col">
         <div className="p-6 border-b border-zinc-100">
@@ -179,9 +179,9 @@ const JobEmailCategorizationApp = () => {
       </aside>
 
       {/* Main Content */}
-      <main className="flex-1 overflow-auto bg-zinc-50 relative">
+      <main className="flex-1 w-full h-full overflow-hidden bg-zinc-50 relative">
         {view === 'board' && (
-          <div className="h-full">
+          <div className="h-full w-full">
             <JobTrackBoard />
           </div>
         )}

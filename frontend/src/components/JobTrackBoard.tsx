@@ -516,7 +516,7 @@ export default function JobTrackBoard() {
     }
 
     return (
-        <div className="min-h-screen bg-zinc-50 text-black font-mono p-4 md:p-8 flex flex-col h-screen">
+        <div className="h-full w-full bg-zinc-50 text-black font-mono p-4 md:p-8 flex flex-col overflow-hidden">
             {/* Page Header */}
             <header className="mb-6 border-b-4 border-black pb-4 flex flex-col md:flex-row justify-between items-start md:items-end gap-4 shrink-0">
                 <div>
