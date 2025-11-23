@@ -188,7 +188,7 @@ const Column = ({ column, jobs, onJobClick }: ColumnProps) => {
     });
 
     return (
-        <div className="flex flex-col w-full h-full min-w-[280px] md:min-w-[300px]">
+        <div className="flex flex-col w-full h-full min-w-[280px] flex-1">
             {/* Column Header - 模仿终端标题栏 */}
             <div className={cn(
                 "mb-4 border-2 border-black text-white p-3 shadow-[4px_4px_0px_0px_rgba(0,0,0,0.2)]",
@@ -242,12 +242,13 @@ const TrashBin = () => {
         <div
             ref={setNodeRef}
             className={cn(
-                "flex flex-col items-center justify-center w-24 min-w-[96px] border-2 border-black border-dashed rounded-sm transition-colors",
+                "flex flex-col items-center justify-center border-2 border-black border-dashed rounded-sm transition-colors",
+                "w-full h-24 md:h-auto md:w-24 min-w-[96px]", // Mobile: full width, Desktop: narrow column
                 isOver ? "bg-red-100 border-red-600" : "bg-zinc-100 border-zinc-300 opacity-50 hover:opacity-100"
             )}
         >
-            <div className="text-center p-4">
-                <span className="text-3xl mb-2 block">🗑️</span>
+            <div className="text-center p-4 flex md:block items-center gap-4">
+                <span className="text-3xl mb-0 md:mb-2 block">🗑️</span>
                 <span className="font-mono text-xs font-bold uppercase tracking-widest">
                     {isOver ? "DROP TO DELETE" : "TRASH"}
                 </span>
@@ -515,9 +516,9 @@ export default function JobTrackBoard() {
     }
 
     return (
-        <div className="min-h-screen bg-zinc-50 text-black font-mono p-8 md:p-12 overflow-x-auto">
+        <div className="min-h-screen bg-zinc-50 text-black font-mono p-4 md:p-8 flex flex-col h-screen">
             {/* Page Header */}
-            <header className="mb-10 border-b-4 border-black pb-6 flex justify-between items-end">
+            <header className="mb-6 border-b-4 border-black pb-4 flex flex-col md:flex-row justify-between items-start md:items-end gap-4 shrink-0">
                 <div>
                     <h1 className="text-4xl md:text-5xl font-black tracking-tighter uppercase mb-2 flex items-center gap-4">
                         <span className="bg-black text-white px-3 py-1 text-2xl block transform -rotate-2 border-2 border-white shadow-[4px_4px_0px_0px_rgba(0,0,0,0.3)]">
@@ -554,7 +555,7 @@ export default function JobTrackBoard() {
                 onDragOver={onDragOver}
                 onDragEnd={onDragEnd}
             >
-                <div className="flex flex-col md:flex-row gap-6 w-full md:w-max pb-10">
+                <div className="flex flex-col md:flex-row gap-4 w-full h-full overflow-x-auto pb-4">
                     {COLUMNS.map((col) => (
                         <Column
                             key={col.id}
