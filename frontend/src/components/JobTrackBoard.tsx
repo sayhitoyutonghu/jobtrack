@@ -33,7 +33,7 @@ function cn(...inputs: ClassValue[]) {
 }
 
 // --- Types ---
-type Status = "Applied" | "Interviewing" | "Offer" | "Rejected";
+type Status = "Applied" | "Interviewing" | "Offer" | "Rejected" | "Trash";
 
 interface Job {
     id: string;
@@ -227,6 +227,36 @@ const Column = ({ column, jobs, onJobClick }: ColumnProps) => {
 };
 
 /**
+ * Trash Bin Component
+ */
+const TrashBin = () => {
+    const { setNodeRef, isOver } = useSortable({
+        id: "Trash",
+        data: {
+            type: "Column",
+            column: { id: "Trash", title: "TRASH", color: "bg-zinc-800", borderColor: "border-zinc-800" }
+        }
+    });
+
+    return (
+        <div
+            ref={setNodeRef}
+            className={cn(
+                "flex flex-col items-center justify-center w-24 min-w-[96px] border-2 border-black border-dashed rounded-sm transition-colors",
+                isOver ? "bg-red-100 border-red-600" : "bg-zinc-100 border-zinc-300 opacity-50 hover:opacity-100"
+            )}
+        >
+            <div className="text-center p-4">
+                <span className="text-3xl mb-2 block">🗑️</span>
+                <span className="font-mono text-xs font-bold uppercase tracking-widest">
+                    {isOver ? "DROP TO DELETE" : "TRASH"}
+                </span>
+            </div>
+        </div>
+    );
+};
+
+/**
  * Job Details Modal
  */
 const JobDetailsModal = ({ job, onClose }: { job: Job; onClose: () => void }) => {
@@ -318,6 +348,25 @@ export default function JobTrackBoard() {
     const [isLoading, setIsLoading] = useState(true);
     const [activeJob, setActiveJob] = useState<Job | null>(null);
     const [selectedJob, setSelectedJob] = useState<Job | null>(null);
+    const [isScanning, setIsScanning] = useState(false);
+
+    const handleScan = async () => {
+        setIsScanning(true);
+        try {
+            // Simulate scan or call actual API
+            await new Promise(resolve => setTimeout(resolve, 2000));
+            // Refresh jobs from backend
+            const res = await fetch("/api/emails/analyze");
+            if (res.ok) {
+                const data = await res.json();
+                if (Array.isArray(data)) setJobs(data);
+            }
+        } catch (e) {
+            console.error("Scan failed", e);
+        } finally {
+            setIsScanning(false);
+        }
+    };
 
     useEffect(() => {
         async function fetchJobs() {
@@ -423,6 +472,11 @@ export default function JobTrackBoard() {
                 const activeIndex = jobs.findIndex((j) => j.id === activeId);
                 const newStatus = over.id as Status;
 
+                // If dropped in Trash, remove it
+                if (newStatus === "Trash") {
+                    return jobs.filter(j => j.id !== activeId);
+                }
+
                 if (jobs[activeIndex].status !== newStatus) {
                     const newJobs = [...jobs];
                     newJobs[activeIndex].status = newStatus;
@@ -463,16 +517,33 @@ export default function JobTrackBoard() {
     return (
         <div className="min-h-screen bg-zinc-50 text-black font-mono p-8 md:p-12 overflow-x-auto">
             {/* Page Header */}
-            <header className="mb-10 border-b-4 border-black pb-6">
-                <h1 className="text-4xl md:text-5xl font-black tracking-tighter uppercase mb-2 flex items-center gap-4">
-                    <span className="bg-black text-white px-3 py-1 text-2xl block transform -rotate-2 border-2 border-white shadow-[4px_4px_0px_0px_rgba(0,0,0,0.3)]">
-                        #
-                    </span>
-                    JobTrack_v1.0
-                </h1>
-                <p className="text-sm md:text-base font-bold opacity-60 uppercase tracking-widest ml-1">
-                    Drag_and_Drop Interface // Secure_Mode
-                </p>
+            <header className="mb-10 border-b-4 border-black pb-6 flex justify-between items-end">
+                <div>
+                    <h1 className="text-4xl md:text-5xl font-black tracking-tighter uppercase mb-2 flex items-center gap-4">
+                        <span className="bg-black text-white px-3 py-1 text-2xl block transform -rotate-2 border-2 border-white shadow-[4px_4px_0px_0px_rgba(0,0,0,0.3)]">
+                            #
+                        </span>
+                        JobTrack_v1.0
+                    </h1>
+                    <p className="text-sm md:text-base font-bold opacity-60 uppercase tracking-widest ml-1">
+                        Drag_and_Drop Interface // Secure_Mode
+                    </p>
+                </div>
+                <button
+                    onClick={handleScan}
+                    disabled={isScanning}
+                    className="bg-black text-white px-6 py-3 font-bold uppercase tracking-wider border-2 border-black hover:bg-white hover:text-black transition-all shadow-[4px_4px_0px_0px_rgba(0,0,0,0.3)] hover:shadow-[2px_2px_0px_0px_rgba(0,0,0,0.3)] hover:translate-y-0.5 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                >
+                    {isScanning ? (
+                        <>
+                            <span className="animate-spin">⏳</span> Scanning...
+                        </>
+                    ) : (
+                        <>
+                            <span>🔍</span> Scan Gmail
+                        </>
+                    )}
+                </button>
             </header>
 
             {/* Kanban Board Area */}
@@ -492,6 +563,9 @@ export default function JobTrackBoard() {
                             onJobClick={setSelectedJob}
                         />
                     ))}
+
+                    {/* Trash Bin */}
+                    <TrashBin />
                 </div>
 
                 {/* Drag Overlay (The floating card) */}
