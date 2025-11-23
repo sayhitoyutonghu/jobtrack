@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useEffect } from "react";
 import {
     DndContext,
     DragOverlay,
@@ -43,15 +43,7 @@ interface Job {
     status: Status;
 }
 
-// --- Mock Data ---
-const INITIAL_DATA: Job[] = [
-    { id: "1", company: "Google", role: "Frontend Engineer", salary: "$180k", status: "Applied" },
-    { id: "2", company: "Spotify", role: "UI Designer", salary: "$140k", status: "Applied" },
-    { id: "3", company: "Stripe", role: "Fullstack Dev", salary: "$200k", status: "Interviewing" },
-    { id: "4", company: "Linear", role: "Product Engineer", salary: "$170k", status: "Interviewing" },
-    { id: "5", company: "Vercel", role: "DevRel", salary: "$160k", status: "Offer" },
-    { id: "6", company: "Oracle", role: "Java Dev", salary: "$120k", status: "Rejected" },
-];
+// --- Mock Data Removed ---
 
 const COLUMNS: { id: Status; title: string; color: string; borderColor: string }[] = [
     { id: "Applied", title: "APPLIED", color: "bg-blue-600", borderColor: "border-blue-600" },
@@ -224,8 +216,31 @@ const Column = ({ column, jobs }: ColumnProps) => {
  * 主看板组件
  */
 export default function JobTrackBoard() {
-    const [jobs, setJobs] = useState<Job[]>(INITIAL_DATA);
+    const [jobs, setJobs] = useState<Job[]>([]);
+    const [isLoading, setIsLoading] = useState(true);
     const [activeJob, setActiveJob] = useState<Job | null>(null);
+
+    useEffect(() => {
+        async function fetchJobs() {
+            try {
+                const res = await fetch("/api/emails/analyze");
+                const data = await res.json();
+                // Ensure data is an array
+                if (Array.isArray(data)) {
+                    setJobs(data);
+                } else {
+                    console.error("API returned non-array data:", data);
+                    setJobs([]);
+                }
+            } catch (error) {
+                console.error("Failed to fetch jobs", error);
+            } finally {
+                setIsLoading(false);
+            }
+        }
+
+        fetchJobs();
+    }, []);
 
     const columns = useMemo(() => {
         const cols = new Map<Status, Job[]>();
@@ -236,6 +251,16 @@ export default function JobTrackBoard() {
         });
         return cols;
     }, [jobs]);
+
+    if (isLoading) {
+        return (
+            <div className="min-h-screen bg-zinc-50 flex items-center justify-center font-mono">
+                <div className="animate-pulse text-xl font-bold tracking-widest">
+                    &gt; SYSTEM_INITIALIZING..._
+                </div>
+            </div>
+        );
+    }
 
     // Sensors definition
     const sensors = useSensors(
