@@ -209,7 +209,7 @@ const Column = ({ column, jobs, onJobClick }: ColumnProps) => {
                 ref={setNodeRef}
                 className={cn(
                     "flex-1 p-2 border-2 border-black bg-zinc-100/50 transition-colors",
-                    "min-h-[500px]" // 保证空列也有高度
+                    "min-h-[500px] overflow-y-auto" // 添加垂直滚动
                 )}
             >
                 <SortableContext
@@ -455,74 +455,48 @@ export default function JobTrackBoard() {
 
                 // Check if authenticated
                 if (!sessionId) {
-                    console.log("Not authenticated, using fallback data");
-                    setJobs(FALLBACK_DATA);
+                    console.log("Not authenticated, no data to load");
+                    setJobs([]);
                     setIsLoading(false);
                     return;
                 }
 
-                const authRes = await fetch("/auth/status", {
-                    headers: { "x-session-id": sessionId }
+                const authRes = await authApi.checkStatus();
+
+                if (!authRes.authenticated) {
+                    console.log("Not authenticated, no data to load");
+                    setJobs([]);
+                    setIsLoading(false);
+                    return;
+                }
+
+                // Fetch recent labeled emails using gmailApi
+                const data = await gmailApi.scanEmails({
+                    maxResults: 100,
+                    query: "newer_than:30d"
                 });
 
-                if (!authRes.ok) {
-                    console.log("Auth check failed, using fallback data");
-                    setJobs(FALLBACK_DATA);
-                    setIsLoading(false);
-                    return;
-                }
+                if (data.success && data.results) {
+                    const loadedJobs = data.results
+                        .filter((r: any) => !r.skipped && r.label)
+                        .map((r: any) => ({
+                            id: r.id,
+                            company: extractCompany(r.subject || "", r.from || ""),
+                            role: extractRole(r.subject || ""),
+                            salary: "Unknown",
+                            status: mapLabelToStatus(r.label),
+                            description: r.subject,
+                            date: new Date().toISOString().split('T')[0],
+                            emailSnippet: r.subject || "No subject"
+                        }));
 
-                const authData = await authRes.json();
-                if (!authData.authenticated) {
-                    console.log("Not authenticated, using fallback data");
-                    setJobs(FALLBACK_DATA);
-                    setIsLoading(false);
-                    return;
-                }
-
-                // Fetch recent labeled emails
-                const res = await fetch("/api/gmail/scan", {
-                    method: "POST",
-                    headers: {
-                        "Content-Type": "application/json",
-                        "x-session-id": sessionId
-                    },
-                    body: JSON.stringify({
-                        maxResults: 100,
-                        query: "newer_than:30d"
-                    })
-                });
-
-                if (res.ok) {
-                    const data = await res.json();
-                    if (data.success && data.results) {
-                        const loadedJobs = data.results
-                            .filter((r: any) => !r.skipped && r.label)
-                            .map((r: any) => ({
-                                id: r.id,
-                                company: extractCompany(r.subject || "", r.from || ""),
-                                role: extractRole(r.subject || ""),
-                                salary: "Unknown",
-                                status: mapLabelToStatus(r.label),
-                                description: r.subject,
-                                date: new Date().toISOString().split('T')[0],
-                                emailSnippet: r.subject || "No subject"
-                            }));
-
-                        if (loadedJobs.length > 0) {
-                            setJobs(loadedJobs);
-                        } else {
-                            setJobs(FALLBACK_DATA);
-                        }
-                    } else {
-                        setJobs(FALLBACK_DATA);
-                    }
+                    setJobs(loadedJobs);
                 } else {
-                    setJobs(FALLBACK_DATA);
+                    setJobs([]);
                 }
             } catch (error) {
                 console.warn("Failed to fetch jobs:", error);
-                setJobs(FALLBACK_DATA);
+                setJobs([]);
             } finally {
                 setIsLoading(false);
             }
