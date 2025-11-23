@@ -1,6 +1,6 @@
 import axios from 'axios';
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || 
+const API_BASE_URL = import.meta.env.VITE_API_URL ||
   (import.meta.env.PROD ? 'https://your-backend-domain.com' : 'http://localhost:3000');
 export const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID || '';
 
@@ -40,9 +40,9 @@ apiClient.interceptors.request.use(
 
 export const authApi = {
   login: () => {
-    window.location.href = "https://jobtrack-production.up.railway.app/auth/google";
+    window.location.href = "http://localhost:3000/auth/google";
   },
-  
+
   checkStatus: async () => {
     const response = await apiClient.get('/auth/status');
     return response.data;
@@ -54,22 +54,22 @@ export const gmailApi = {
     const response = await apiClient.post('/api/gmail/setup');
     return response.data;
   },
-  
+
   createLabel: async (labelData) => {
     const response = await apiClient.post('/api/gmail/create-label', labelData);
     return response.data;
   },
-  
+
   analyzeEmail: async (emailContent) => {
     const response = await apiClient.post('/api/gmail/analyze-email', { emailContent });
     return response.data;
   },
-  
+
   scanEmails: async (options = {}) => {
     const response = await apiClient.post('/api/gmail/scan', options);
     return response.data;
   },
-  
+
   getLabels: async () => {
     const response = await apiClient.get('/api/labels');
     return response.data;

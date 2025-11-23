@@ -344,26 +344,119 @@ const JobDetailsModal = ({ job, onClose }: { job: Job; onClose: () => void }) =>
 /**
  * 主看板组件
  */
+// Helper functions for Gmail data conversion
+function extractCompany(subject: string, from: string): string {
+    // Try to extract company from subject
+    const subjectMatch = subject.match(/(?:from|at|@)\s+([A-Z][a-zA-Z\s&]+?)(?:\s|$|\||,)/i);
+    if (subjectMatch) return subjectMatch[1].trim();
+
+    // Extract from email domain
+    const fromMatch = from.match(/@([a-zA-Z0-9-]+)\./);
+    if (fromMatch) {
+        const domain = fromMatch[1];
+        return domain.charAt(0).toUpperCase() + domain.slice(1);
+    }
+
+    return "Unknown Company";
+}
+
+function extractRole(subject: string): string {
+    const roleKeywords = ["Engineer", "Developer", "Designer", "Manager", "Analyst", "Scientist", "Architect"];
+    for (const keyword of roleKeywords) {
+        if (subject.toLowerCase().includes(keyword.toLowerCase())) return keyword;
+    }
+    return "Position";
+}
+
+function mapLabelToStatus(label: string): Status {
+    const labelLower = label.toLowerCase();
+    if (labelLower.includes("application") || labelLower.includes("applied")) return "Applied";
+    if (labelLower.includes("interview")) return "Interviewing";
+    if (labelLower.includes("offer")) return "Offer";
+    if (labelLower.includes("reject")) return "Rejected";
+    return "Applied";
+}
+
 export default function JobTrackBoard() {
     const [jobs, setJobs] = useState<Job[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [activeJob, setActiveJob] = useState<Job | null>(null);
     const [selectedJob, setSelectedJob] = useState<Job | null>(null);
     const [isScanning, setIsScanning] = useState(false);
+    const [scanMessage, setScanMessage] = useState<string | null>(null);
+    const [lastScanTime, setLastScanTime] = useState<Date | null>(null);
 
     const handleScan = async () => {
         setIsScanning(true);
+        setScanMessage(null);
+
         try {
-            // Simulate scan or call actual API
-            await new Promise(resolve => setTimeout(resolve, 2000));
-            // Refresh jobs from backend
-            const res = await fetch("/api/emails/analyze");
+            const sessionId = localStorage.getItem('session_id');
+            if (!sessionId) {
+                setScanMessage("⚠️ Please sign in with Google first");
+                setTimeout(() => setScanMessage(null), 3000);
+                setIsScanning(false);
+                return;
+            }
+
+            const res = await fetch("/api/gmail/scan", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    "x-session-id": sessionId
+                },
+                body: JSON.stringify({
+                    maxResults: 50,
+                    query: "is:unread newer_than:7d"
+                })
+            });
+
+            if (res.status === 401) {
+                setScanMessage("⚠️ Session expired - please sign in again");
+                localStorage.removeItem('session_id');
+                setTimeout(() => setScanMessage(null), 3000);
+                setIsScanning(false);
+                return;
+            }
+
             if (res.ok) {
                 const data = await res.json();
-                if (Array.isArray(data)) setJobs(data);
+
+                if (data.success && data.results) {
+                    const newJobs = data.results
+                        .filter((r: any) => !r.skipped && r.label)
+                        .map((r: any) => ({
+                            id: r.id,
+                            company: extractCompany(r.subject || "", r.from || ""),
+                            role: extractRole(r.subject || ""),
+                            salary: "Unknown",
+                            status: mapLabelToStatus(r.label),
+                            description: r.subject,
+                            date: new Date().toISOString().split('T')[0],
+                            emailSnippet: r.subject || "No subject"
+                        }));
+
+                    setJobs(prevJobs => {
+                        const existingIds = new Set(prevJobs.map(j => j.id));
+                        const uniqueNewJobs = newJobs.filter((j: Job) => !existingIds.has(j.id));
+                        return [...prevJobs, ...uniqueNewJobs];
+                    });
+
+                    setLastScanTime(new Date());
+                    setScanMessage(`✓ Found ${newJobs.length} job email${newJobs.length !== 1 ? 's' : ''}!`);
+                    setTimeout(() => setScanMessage(null), 5000);
+                } else {
+                    setScanMessage("No new emails found");
+                    setTimeout(() => setScanMessage(null), 3000);
+                }
+            } else {
+                setScanMessage("❌ Scan failed");
+                setTimeout(() => setScanMessage(null), 3000);
             }
         } catch (e) {
             console.error("Scan failed", e);
+            setScanMessage("❌ Network error");
+            setTimeout(() => setScanMessage(null), 3000);
         } finally {
             setIsScanning(false);
         }
@@ -372,33 +465,78 @@ export default function JobTrackBoard() {
     useEffect(() => {
         async function fetchJobs() {
             try {
-                // Try to fetch from API
-                // Note: On Vercel, this will 404 unless you have a backend deployed and configured.
-                // We use a timeout to prevent hanging.
-                const controller = new AbortController();
-                const timeoutId = setTimeout(() => controller.abort(), 5000);
+                setIsLoading(true);
+                const sessionId = localStorage.getItem('session_id');
 
-                const res = await fetch("/api/emails/analyze", {
-                    signal: controller.signal,
-                    headers: {
-                        'Accept': 'application/json'
-                    }
-                });
-                clearTimeout(timeoutId);
-
-                if (!res.ok) {
-                    throw new Error(`API Error: ${res.status}`);
+                // Check if authenticated
+                if (!sessionId) {
+                    console.log("Not authenticated, using fallback data");
+                    setJobs(FALLBACK_DATA);
+                    setIsLoading(false);
+                    return;
                 }
 
-                const data = await res.json();
-                if (Array.isArray(data) && data.length > 0) {
-                    setJobs(data);
+                const authRes = await fetch("/auth/status", {
+                    headers: { "x-session-id": sessionId }
+                });
+
+                if (!authRes.ok) {
+                    console.log("Auth check failed, using fallback data");
+                    setJobs(FALLBACK_DATA);
+                    setIsLoading(false);
+                    return;
+                }
+
+                const authData = await authRes.json();
+                if (!authData.authenticated) {
+                    console.log("Not authenticated, using fallback data");
+                    setJobs(FALLBACK_DATA);
+                    setIsLoading(false);
+                    return;
+                }
+
+                // Fetch recent labeled emails
+                const res = await fetch("/api/gmail/scan", {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json",
+                        "x-session-id": sessionId
+                    },
+                    body: JSON.stringify({
+                        maxResults: 100,
+                        query: "newer_than:30d"
+                    })
+                });
+
+                if (res.ok) {
+                    const data = await res.json();
+                    if (data.success && data.results) {
+                        const loadedJobs = data.results
+                            .filter((r: any) => !r.skipped && r.label)
+                            .map((r: any) => ({
+                                id: r.id,
+                                company: extractCompany(r.subject || "", r.from || ""),
+                                role: extractRole(r.subject || ""),
+                                salary: "Unknown",
+                                status: mapLabelToStatus(r.label),
+                                description: r.subject,
+                                date: new Date().toISOString().split('T')[0],
+                                emailSnippet: r.subject || "No subject"
+                            }));
+
+                        if (loadedJobs.length > 0) {
+                            setJobs(loadedJobs);
+                        } else {
+                            setJobs(FALLBACK_DATA);
+                        }
+                    } else {
+                        setJobs(FALLBACK_DATA);
+                    }
                 } else {
-                    console.warn("API returned empty data, using fallback.");
                     setJobs(FALLBACK_DATA);
                 }
             } catch (error) {
-                console.warn("Failed to fetch jobs (using fallback data):", error);
+                console.warn("Failed to fetch jobs:", error);
                 setJobs(FALLBACK_DATA);
             } finally {
                 setIsLoading(false);
@@ -586,6 +724,13 @@ export default function JobTrackBoard() {
             {/* Job Details Modal */}
             {selectedJob && (
                 <JobDetailsModal job={selectedJob} onClose={() => setSelectedJob(null)} />
+            )}
+
+            {/* Toast Notification */}
+            {scanMessage && (
+                <div className="fixed top-4 right-4 z-50 bg-black text-white px-6 py-3 border-2 border-white shadow-[4px_4px_0px_0px_rgba(255,255,255,0.3)] font-mono text-sm animate-slide-in">
+                    {scanMessage}
+                </div>
             )}
         </div>
     );
