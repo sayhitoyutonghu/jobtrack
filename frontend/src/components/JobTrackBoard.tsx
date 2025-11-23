@@ -188,7 +188,7 @@ const Column = ({ column, jobs, onJobClick }: ColumnProps) => {
     });
 
     return (
-        <div className="flex flex-col w-full h-full min-w-[280px] flex-1">
+        <div className="flex flex-col h-full w-full">
             {/* Column Header - 模仿终端标题栏 */}
             <div className={cn(
                 "mb-4 border-2 border-black text-white p-3 shadow-[4px_4px_0px_0px_rgba(0,0,0,0.2)]",
@@ -243,14 +243,14 @@ const TrashBin = () => {
             ref={setNodeRef}
             className={cn(
                 "flex flex-col items-center justify-center border-2 border-black border-dashed rounded-sm transition-colors",
-                "w-full h-24 md:h-auto md:w-24 min-w-[96px]", // Mobile: full width, Desktop: narrow column
+                "h-24 md:h-auto w-full md:w-auto md:min-w-[80px]", // Mobile: full width, Desktop: narrow column
                 isOver ? "bg-red-100 border-red-600" : "bg-zinc-100 border-zinc-300 opacity-50 hover:opacity-100"
             )}
         >
-            <div className="text-center p-4 flex md:block items-center gap-4">
-                <span className="text-3xl mb-0 md:mb-2 block">🗑️</span>
-                <span className="font-mono text-xs font-bold uppercase tracking-widest">
-                    {isOver ? "DROP TO DELETE" : "TRASH"}
+            <div className="text-center p-2 md:p-4 flex md:block items-center justify-center gap-4 h-full">
+                <span className="text-2xl md:text-3xl mb-0 md:mb-2 block">🗑️</span>
+                <span className="font-mono text-[10px] md:text-xs font-bold uppercase tracking-widest hidden md:block">
+                    {isOver ? "DROP" : "TRASH"}
                 </span>
             </div>
         </div>
@@ -555,18 +555,21 @@ export default function JobTrackBoard() {
                 onDragOver={onDragOver}
                 onDragEnd={onDragEnd}
             >
-                <div className="flex flex-col md:flex-row gap-4 w-full h-full overflow-x-auto pb-4">
+                <div className="flex-1 grid grid-cols-1 md:grid-cols-[repeat(4,1fr)_80px] gap-4 w-full h-full min-h-0">
                     {COLUMNS.map((col) => (
-                        <Column
-                            key={col.id}
-                            column={col}
-                            jobs={columns.get(col.id) || []}
-                            onJobClick={setSelectedJob}
-                        />
+                        <div key={col.id} className="h-full min-h-0 overflow-y-auto">
+                            <Column
+                                column={col}
+                                jobs={columns.get(col.id) || []}
+                                onJobClick={setSelectedJob}
+                            />
+                        </div>
                     ))}
 
                     {/* Trash Bin */}
-                    <TrashBin />
+                    <div className="h-full min-h-0">
+                        <TrashBin />
+                    </div>
                 </div>
 
                 {/* Drag Overlay (The floating card) */}
