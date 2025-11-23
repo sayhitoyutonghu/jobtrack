@@ -41,16 +41,19 @@ interface Job {
     role: string;
     salary: string;
     status: Status;
+    description?: string;
+    date?: string;
+    emailSnippet?: string;
 }
 
 // --- Mock Data (Fallback) ---
 const FALLBACK_DATA: Job[] = [
-    { id: "1", company: "Google", role: "Frontend Engineer", salary: "$180k", status: "Applied" },
-    { id: "2", company: "Spotify", role: "UI Designer", salary: "$140k", status: "Applied" },
-    { id: "3", company: "Stripe", role: "Fullstack Dev", salary: "$200k", status: "Interviewing" },
-    { id: "4", company: "Linear", role: "Product Engineer", salary: "$170k", status: "Interviewing" },
-    { id: "5", company: "Vercel", role: "DevRel", salary: "$160k", status: "Offer" },
-    { id: "6", company: "Oracle", role: "Java Dev", salary: "$120k", status: "Rejected" },
+    { id: "1", company: "Google", role: "Frontend Engineer", salary: "$180k", status: "Applied", description: "Working on the Google Cloud Console team.", date: "2023-10-01", emailSnippet: "Thank you for your application..." },
+    { id: "2", company: "Spotify", role: "UI Designer", salary: "$140k", status: "Applied", description: "Design system team.", date: "2023-10-05", emailSnippet: "We have received your application..." },
+    { id: "3", company: "Stripe", role: "Fullstack Dev", salary: "$200k", status: "Interviewing", description: "Payments infrastructure.", date: "2023-10-10", emailSnippet: "We'd like to schedule a chat..." },
+    { id: "4", company: "Linear", role: "Product Engineer", salary: "$170k", status: "Interviewing", description: "Building the issue tracker.", date: "2023-10-12", emailSnippet: "Next steps for your application..." },
+    { id: "5", company: "Vercel", role: "DevRel", salary: "$160k", status: "Offer", description: "Developer Relations for Next.js.", date: "2023-10-15", emailSnippet: "Congratulations! We are pleased to offer..." },
+    { id: "6", company: "Oracle", role: "Java Dev", salary: "$120k", status: "Rejected", description: "Legacy systems maintenance.", date: "2023-09-20", emailSnippet: "Thank you for your interest, but..." },
 ];
 
 const COLUMNS: { id: Status; title: string; color: string; borderColor: string }[] = [
@@ -68,9 +71,10 @@ const COLUMNS: { id: Status; title: string; color: string; borderColor: string }
 interface JobCardProps {
     job: Job;
     isOverlay?: boolean;
+    onClick?: (job: Job) => void;
 }
 
-const JobCard = ({ job, isOverlay }: JobCardProps) => {
+const JobCard = ({ job, isOverlay, onClick }: JobCardProps) => {
     const {
         setNodeRef,
         attributes,
@@ -135,6 +139,7 @@ const JobCard = ({ job, isOverlay }: JobCardProps) => {
             style={style}
             {...attributes}
             {...listeners}
+            onClick={() => onClick?.(job)}
             className={cn(baseStyles, isOverlay ? overlayStyles : staticStyles)}
         >
             {/* Header */}
@@ -170,9 +175,10 @@ const JobCard = ({ job, isOverlay }: JobCardProps) => {
 interface ColumnProps {
     column: { id: Status; title: string; color: string; borderColor: string };
     jobs: Job[];
+    onJobClick: (job: Job) => void;
 }
 
-const Column = ({ column, jobs }: ColumnProps) => {
+const Column = ({ column, jobs, onJobClick }: ColumnProps) => {
     const { setNodeRef } = useSortable({
         id: column.id,
         data: {
@@ -182,7 +188,7 @@ const Column = ({ column, jobs }: ColumnProps) => {
     });
 
     return (
-        <div className="flex flex-col w-full h-full min-w-[300px]">
+        <div className="flex flex-col w-full h-full min-w-[280px] md:min-w-[300px]">
             {/* Column Header - 模仿终端标题栏 */}
             <div className={cn(
                 "mb-4 border-2 border-black text-white p-3 shadow-[4px_4px_0px_0px_rgba(0,0,0,0.2)]",
@@ -211,10 +217,94 @@ const Column = ({ column, jobs }: ColumnProps) => {
                 >
                     <div className="flex flex-col gap-1">
                         {jobs.map((job) => (
-                            <JobCard key={job.id} job={job} />
+                            <JobCard key={job.id} job={job} onClick={onJobClick} />
                         ))}
                     </div>
                 </SortableContext>
+            </div>
+        </div>
+    );
+};
+
+/**
+ * Job Details Modal
+ */
+const JobDetailsModal = ({ job, onClose }: { job: Job; onClose: () => void }) => {
+    if (!job) return null;
+
+    return (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm" onClick={onClose}>
+            <div
+                className="bg-white border-4 border-black shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] w-full max-w-2xl max-h-[90vh] overflow-y-auto p-6 md:p-8 relative"
+                onClick={(e) => e.stopPropagation()}
+            >
+                <button
+                    onClick={onClose}
+                    className="absolute top-4 right-4 p-2 hover:bg-black hover:text-white border-2 border-transparent hover:border-black transition-colors"
+                >
+                    <span className="sr-only">Close</span>
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                </button>
+
+                <div className="mb-6">
+                    <div className="inline-block bg-black text-white px-3 py-1 text-sm font-mono mb-2">
+                        ID: {job.id}
+                    </div>
+                    <h2 className="text-3xl md:text-4xl font-black uppercase tracking-tighter mb-1">{job.company}</h2>
+                    <h3 className="text-xl font-mono text-zinc-600 border-b-2 border-black pb-4 mb-4">{job.role}</h3>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+                    <div className="bg-zinc-50 p-4 border-2 border-black">
+                        <span className="block text-xs font-bold text-zinc-400 uppercase mb-1">Status</span>
+                        <span className={cn(
+                            "inline-block px-2 py-1 text-sm font-bold border border-black",
+                            job.status === 'Applied' && "bg-blue-100 text-blue-800",
+                            job.status === 'Interviewing' && "bg-orange-100 text-orange-800",
+                            job.status === 'Offer' && "bg-green-100 text-green-800",
+                            job.status === 'Rejected' && "bg-red-100 text-red-800",
+                        )}>
+                            {job.status.toUpperCase()}
+                        </span>
+                    </div>
+                    <div className="bg-zinc-50 p-4 border-2 border-black">
+                        <span className="block text-xs font-bold text-zinc-400 uppercase mb-1">Salary</span>
+                        <span className="text-lg font-bold">{job.salary}</span>
+                    </div>
+                </div>
+
+                <div className="space-y-6">
+                    <div>
+                        <h4 className="font-bold uppercase tracking-wider mb-2 flex items-center gap-2">
+                            <span className="w-2 h-2 bg-black"></span>
+                            Email Snippet
+                        </h4>
+                        <div className="bg-zinc-100 p-4 border-2 border-black font-mono text-sm leading-relaxed">
+                            {job.emailSnippet || "No email content available."}
+                        </div>
+                    </div>
+
+                    {job.description && (
+                        <div>
+                            <h4 className="font-bold uppercase tracking-wider mb-2 flex items-center gap-2">
+                                <span className="w-2 h-2 bg-black"></span>
+                                Description
+                            </h4>
+                            <p className="text-zinc-700 leading-relaxed">
+                                {job.description}
+                            </p>
+                        </div>
+                    )}
+                </div>
+
+                <div className="mt-8 pt-6 border-t-2 border-black flex justify-end gap-4">
+                    <button onClick={onClose} className="px-6 py-2 border-2 border-black font-bold hover:bg-zinc-100 transition-colors">
+                        CLOSE
+                    </button>
+                    <button className="px-6 py-2 bg-black text-white border-2 border-black font-bold hover:bg-zinc-800 transition-colors shadow-[4px_4px_0px_0px_rgba(0,0,0,0.2)] hover:translate-y-0.5 hover:shadow-[2px_2px_0px_0px_rgba(0,0,0,0.2)]">
+                        OPEN IN GMAIL
+                    </button>
+                </div>
             </div>
         </div>
     );
@@ -227,6 +317,7 @@ export default function JobTrackBoard() {
     const [jobs, setJobs] = useState<Job[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [activeJob, setActiveJob] = useState<Job | null>(null);
+    const [selectedJob, setSelectedJob] = useState<Job | null>(null);
 
     useEffect(() => {
         async function fetchJobs() {
@@ -392,12 +483,13 @@ export default function JobTrackBoard() {
                 onDragOver={onDragOver}
                 onDragEnd={onDragEnd}
             >
-                <div className="flex gap-6 w-max pb-10">
+                <div className="flex flex-col md:flex-row gap-6 w-full md:w-max pb-10">
                     {COLUMNS.map((col) => (
                         <Column
                             key={col.id}
                             column={col}
                             jobs={columns.get(col.id) || []}
+                            onJobClick={setSelectedJob}
                         />
                     ))}
                 </div>
@@ -409,6 +501,11 @@ export default function JobTrackBoard() {
                     ) : null}
                 </DragOverlay>
             </DndContext>
+
+            {/* Job Details Modal */}
+            {selectedJob && (
+                <JobDetailsModal job={selectedJob} onClose={() => setSelectedJob(null)} />
+            )}
         </div>
     );
 }
