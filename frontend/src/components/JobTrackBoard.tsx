@@ -26,6 +26,7 @@ import { CSS } from "@dnd-kit/utilities";
 import { clsx, type ClassValue } from "clsx";
 import { twMerge } from "tailwind-merge";
 import { GripVertical } from "lucide-react";
+import { gmailApi, authApi } from "../api/client.js";
 
 // --- Utility: 合并 Tailwind 类名 ---
 function cn(...inputs: ClassValue[]) {
@@ -399,63 +400,47 @@ export default function JobTrackBoard() {
                 return;
             }
 
-            const res = await fetch("/api/gmail/scan", {
-                method: "POST",
-                headers: {
-                    "Content-Type": "application/json",
-                    "x-session-id": sessionId
-                },
-                body: JSON.stringify({
-                    maxResults: 50,
-                    query: "is:unread newer_than:7d"
-                })
+            // Use gmailApi which handles authentication headers automatically
+            const data = await gmailApi.scanEmails({
+                maxResults: 50,
+                query: "is:unread newer_than:7d"
             });
 
-            if (res.status === 401) {
+            if (data.success && data.results) {
+                const newJobs = data.results
+                    .filter((r: any) => !r.skipped && r.label)
+                    .map((r: any) => ({
+                        id: r.id,
+                        company: extractCompany(r.subject || "", r.from || ""),
+                        role: extractRole(r.subject || ""),
+                        salary: "Unknown",
+                        status: mapLabelToStatus(r.label),
+                        description: r.subject,
+                        date: new Date().toISOString().split('T')[0],
+                        emailSnippet: r.subject || "No subject"
+                    }));
+
+                setJobs(prevJobs => {
+                    const existingIds = new Set(prevJobs.map(j => j.id));
+                    const uniqueNewJobs = newJobs.filter((j: Job) => !existingIds.has(j.id));
+                    return [...prevJobs, ...uniqueNewJobs];
+                });
+
+                setLastScanTime(new Date());
+                setScanMessage(`✓ Found ${newJobs.length} job email${newJobs.length !== 1 ? 's' : ''}!`);
+                setTimeout(() => setScanMessage(null), 5000);
+            } else {
+                setScanMessage("No new emails found");
+                setTimeout(() => setScanMessage(null), 3000);
+            }
+        } catch (e: any) {
+            console.error("Scan failed", e);
+            if (e.response?.status === 401) {
                 setScanMessage("⚠️ Session expired - please sign in again");
                 localStorage.removeItem('session_id');
-                setTimeout(() => setScanMessage(null), 3000);
-                setIsScanning(false);
-                return;
-            }
-
-            if (res.ok) {
-                const data = await res.json();
-
-                if (data.success && data.results) {
-                    const newJobs = data.results
-                        .filter((r: any) => !r.skipped && r.label)
-                        .map((r: any) => ({
-                            id: r.id,
-                            company: extractCompany(r.subject || "", r.from || ""),
-                            role: extractRole(r.subject || ""),
-                            salary: "Unknown",
-                            status: mapLabelToStatus(r.label),
-                            description: r.subject,
-                            date: new Date().toISOString().split('T')[0],
-                            emailSnippet: r.subject || "No subject"
-                        }));
-
-                    setJobs(prevJobs => {
-                        const existingIds = new Set(prevJobs.map(j => j.id));
-                        const uniqueNewJobs = newJobs.filter((j: Job) => !existingIds.has(j.id));
-                        return [...prevJobs, ...uniqueNewJobs];
-                    });
-
-                    setLastScanTime(new Date());
-                    setScanMessage(`✓ Found ${newJobs.length} job email${newJobs.length !== 1 ? 's' : ''}!`);
-                    setTimeout(() => setScanMessage(null), 5000);
-                } else {
-                    setScanMessage("No new emails found");
-                    setTimeout(() => setScanMessage(null), 3000);
-                }
             } else {
-                setScanMessage("❌ Scan failed");
-                setTimeout(() => setScanMessage(null), 3000);
+                setScanMessage("❌ Scan failed - " + (e.message || "Network error"));
             }
-        } catch (e) {
-            console.error("Scan failed", e);
-            setScanMessage("❌ Network error");
             setTimeout(() => setScanMessage(null), 3000);
         } finally {
             setIsScanning(false);
