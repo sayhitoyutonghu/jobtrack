@@ -242,8 +242,8 @@ const TrashBin = () => {
         <div
             ref={setNodeRef}
             className={cn(
-                "flex flex-col items-center justify-center border-2 border-black border-dashed rounded-sm transition-colors",
-                "h-24 md:h-auto w-full md:w-auto md:min-w-[80px]", // Mobile: full width, Desktop: narrow column
+                "flex flex-col items-center justify-center border-2 border-black border-dashed rounded-sm transition-colors mt-4 md:mt-0",
+                "w-full h-24 md:h-full md:w-24 min-w-[80px]", // Mobile: full width bottom bar, Desktop: narrow side column
                 isOver ? "bg-red-100 border-red-600" : "bg-zinc-100 border-zinc-300 opacity-50 hover:opacity-100"
             )}
         >
@@ -555,19 +555,22 @@ export default function JobTrackBoard() {
                 onDragOver={onDragOver}
                 onDragEnd={onDragEnd}
             >
-                <div className="flex-1 grid grid-cols-1 md:grid-cols-[repeat(4,1fr)_80px] gap-4 w-full h-full min-h-0">
-                    {COLUMNS.map((col) => (
-                        <div key={col.id} className="h-full min-h-0 overflow-y-auto">
-                            <Column
-                                column={col}
-                                jobs={columns.get(col.id) || []}
-                                onJobClick={setSelectedJob}
-                            />
-                        </div>
-                    ))}
+                <div className="flex-1 flex flex-col md:flex-row gap-4 w-full h-full min-h-0">
+                    {/* Main Grid for Columns */}
+                    <div className="flex-1 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 h-full min-h-0">
+                        {COLUMNS.map((col) => (
+                            <div key={col.id} className="h-full min-h-0 flex flex-col">
+                                <Column
+                                    column={col}
+                                    jobs={columns.get(col.id) || []}
+                                    onJobClick={setSelectedJob}
+                                />
+                            </div>
+                        ))}
+                    </div>
 
-                    {/* Trash Bin */}
-                    <div className="h-full min-h-0">
+                    {/* Trash Bin - Side on Desktop, Bottom on Mobile */}
+                    <div className="shrink-0">
                         <TrashBin />
                     </div>
                 </div>
