@@ -153,7 +153,7 @@ Respond with only one label (lowercase).`;
 
   createResult(category, confidence = 'medium', method = 'ai', extras = {}) {
     if (!category) return null;
-    
+
     const labelConfig = JOB_LABELS.find(label => label.name.toLowerCase() === category);
     if (!labelConfig) return null;
 
@@ -230,19 +230,19 @@ Respond with only one label (lowercase).`;
   isLinkedInJobAlert(email) {
     const subject = (email.subject || '').toLowerCase();
     const from = (email.from || '').toLowerCase();
-    
-    const isFromJobAlerts = from.includes('linkedin job alerts') || 
-                           from.includes('jobalerts-noreply@linkedin.com') ||
-                           from.includes('jobs-noreply@linkedin.com');
-    
+
+    const isFromJobAlerts = from.includes('linkedin job alerts') ||
+      from.includes('jobalerts-noreply@linkedin.com') ||
+      from.includes('jobs-noreply@linkedin.com');
+
     if (!isFromJobAlerts) return false;
-    
+
     const JOB_KEYWORDS = [
       'designer', 'developer', 'engineer', 'manager', 'intern',
       'job alert', 'new jobs', 'job recommendations',
       'salary', '$', '/year', '/hour'
     ];
-    
+
     return JOB_KEYWORDS.some(keyword => subject.includes(keyword));
   }
 
@@ -253,17 +253,17 @@ Respond with only one label (lowercase).`;
     const subject = (email.subject || '').toLowerCase();
     const text = `${subject} ${email.snippet || ''}`.toLowerCase();
     const from = (email.from || '').toLowerCase();
-    
-    const isFromUser = from.includes('@gmail.com') || 
-                      email.threadLabels?.includes('SENT');
-    
+
+    const isFromUser = from.includes('@gmail.com') ||
+      email.threadLabels?.includes('SENT');
+
     if (!isFromUser) return false;
-    
+
     const APPLICATION_KEYWORDS = [
       'application', 'applying', 'portfolio', 'resume', 'cv',
       'cover letter', 'position', 'job opening', 'opportunity', 'role'
     ];
-    
+
     return APPLICATION_KEYWORDS.some(keyword => text.includes(keyword));
   }
 
@@ -285,8 +285,8 @@ Respond with only one label (lowercase).`;
       '@billing.', '@payments.', '@mail.stripe.com', '@paypal.com'
     ];
 
-    return FINANCE_SENDERS.some(s => from.includes(s)) || 
-           FINANCE_KEYWORDS.some(k => text.includes(k));
+    return FINANCE_SENDERS.some(s => from.includes(s)) ||
+      FINANCE_KEYWORDS.some(k => text.includes(k));
   }
 
   /**
@@ -326,9 +326,33 @@ Respond with only one label (lowercase).`;
       return null;
     }
 
-    // First try quick checks
+    // Skip job alert/discovery emails (not actual applications)
     if (this.isLinkedInJobAlert(email)) {
-      return this.createResult('application', 'high', 'linkedin-job-alert');
+      console.log('⏭️  Skipping LinkedIn job alert email');
+      return null;
+    }
+
+    // Skip generic job discovery/alert emails
+    const subject = (email.subject || '').toLowerCase();
+    const body = (email.body || '').toLowerCase();
+    const text = `${subject} ${body}`;
+
+    const JOB_ALERT_PATTERNS = [
+      /job alert/i,
+      /your job alert/i,
+      /jobs? for you/i,
+      /new jobs?/i,
+      /recommended jobs?/i,
+      /we found \d+ jobs?/i,
+      /\d+ new jobs?/i,
+      /job recommendations/i,
+      /daily job alert/i,
+      /weekly job alert/i
+    ];
+
+    if (JOB_ALERT_PATTERNS.some(pattern => pattern.test(text))) {
+      console.log('⏭️  Skipping job alert/discovery email');
+      return null;
     }
 
     if (this.isOutboundJobApplication(email)) {
@@ -336,11 +360,6 @@ Respond with only one label (lowercase).`;
     }
 
     // Phrase-based heuristics before AI (improves accuracy without cost)
-    const subject = (email.subject || '').toLowerCase();
-    const body = (email.body || '').toLowerCase();
-    const text = `${subject} ${body}`;
-
-    // Guard: if looks like generic content/guide/newsletter, avoid mapping to Offer unless strong signals
     const looksGenericContent = /\b(how to|guide|newsletter|daily update|tips|blog)\b/.test(subject);
 
     const phraseRules = [
