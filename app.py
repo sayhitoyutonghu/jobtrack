@@ -188,4 +188,4 @@ if __name__ == '__main__':
     print("\nPress CTRL+C to stop the server")
     print("="*50 + "\n")
     
-    app.run(host='0.0.0.0', port=5000, debug=True)
+    app.run(host='0.0.0.0', port=5001, debug=True)
