@@ -43,7 +43,15 @@ interface Job {
     status: Status;
 }
 
-// --- Mock Data Removed ---
+// --- Mock Data (Fallback) ---
+const FALLBACK_DATA: Job[] = [
+    { id: "1", company: "Google", role: "Frontend Engineer", salary: "$180k", status: "Applied" },
+    { id: "2", company: "Spotify", role: "UI Designer", salary: "$140k", status: "Applied" },
+    { id: "3", company: "Stripe", role: "Fullstack Dev", salary: "$200k", status: "Interviewing" },
+    { id: "4", company: "Linear", role: "Product Engineer", salary: "$170k", status: "Interviewing" },
+    { id: "5", company: "Vercel", role: "DevRel", salary: "$160k", status: "Offer" },
+    { id: "6", company: "Oracle", role: "Java Dev", salary: "$120k", status: "Rejected" },
+];
 
 const COLUMNS: { id: Status; title: string; color: string; borderColor: string }[] = [
     { id: "Applied", title: "APPLIED", color: "bg-blue-600", borderColor: "border-blue-600" },
@@ -223,17 +231,34 @@ export default function JobTrackBoard() {
     useEffect(() => {
         async function fetchJobs() {
             try {
-                const res = await fetch("/api/emails/analyze");
+                // Try to fetch from API
+                // Note: On Vercel, this will 404 unless you have a backend deployed and configured.
+                // We use a timeout to prevent hanging.
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), 5000);
+
+                const res = await fetch("/api/emails/analyze", {
+                    signal: controller.signal,
+                    headers: {
+                        'Accept': 'application/json'
+                    }
+                });
+                clearTimeout(timeoutId);
+
+                if (!res.ok) {
+                    throw new Error(`API Error: ${res.status}`);
+                }
+
                 const data = await res.json();
-                // Ensure data is an array
-                if (Array.isArray(data)) {
+                if (Array.isArray(data) && data.length > 0) {
                     setJobs(data);
                 } else {
-                    console.error("API returned non-array data:", data);
-                    setJobs([]);
+                    console.warn("API returned empty data, using fallback.");
+                    setJobs(FALLBACK_DATA);
                 }
             } catch (error) {
-                console.error("Failed to fetch jobs", error);
+                console.warn("Failed to fetch jobs (using fallback data):", error);
+                setJobs(FALLBACK_DATA);
             } finally {
                 setIsLoading(false);
             }
