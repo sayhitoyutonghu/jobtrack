@@ -15,7 +15,7 @@ router.post('/setup', async (req, res) => {
   try {
     const gmailService = new GmailService(req.user.auth);
     const results = await gmailService.setupAllLabels();
-    
+
     res.json({
       success: true,
       message: 'Labels created in your Gmail',
@@ -23,9 +23,9 @@ router.post('/setup', async (req, res) => {
     });
   } catch (error) {
     console.error('Setup error:', error);
-    res.status(500).json({ 
+    res.status(500).json({
       success: false,
-      error: error.message 
+      error: error.message
     });
   }
 });
@@ -37,14 +37,14 @@ router.post('/setup', async (req, res) => {
 router.post('/create-label', async (req, res) => {
   try {
     const { name, description, color, icon, keywords, senders } = req.body;
-    
+
     if (!name) {
       return res.status(400).json({
         success: false,
         error: 'Label name is required'
       });
     }
-    
+
     const gmailService = new GmailService(req.user.auth);
     const label = await gmailService.createCustomLabel({
       name,
@@ -52,12 +52,12 @@ router.post('/create-label', async (req, res) => {
       color,
       icon
     });
-    
+
     // Save custom label rules to config
     const fs = require('fs').promises;
     const path = require('path');
     const configFile = path.join(__dirname, '../data/label-config.json');
-    
+
     try {
       let config = { labels: {} };
       try {
@@ -66,7 +66,7 @@ router.post('/create-label', async (req, res) => {
       } catch (e) {
         // File doesn't exist, start with empty config
       }
-      
+
       const labelId = label.id || label.name.toLowerCase().replace(/[^a-z0-9]/g, '-');
       config.labels[labelId] = {
         enabled: true,
@@ -78,13 +78,13 @@ router.post('/create-label', async (req, res) => {
         color: color || { backgroundColor: '#4a86e8', textColor: '#ffffff' },
         icon: icon || '📋'
       };
-      
+
       await fs.writeFile(configFile, JSON.stringify(config, null, 2));
       console.log(`[gmail] Saved custom label rules for "${name}":`, config.labels[labelId]);
     } catch (configError) {
       console.warn('Failed to save custom label rules:', configError.message);
     }
-    
+
     res.json({
       success: true,
       message: `Label "${name}" created successfully`,
@@ -92,9 +92,9 @@ router.post('/create-label', async (req, res) => {
     });
   } catch (error) {
     console.error('Create label error:', error);
-    res.status(500).json({ 
+    res.status(500).json({
       success: false,
-      error: error.message 
+      error: error.message
     });
   }
 });
@@ -106,7 +106,7 @@ router.post('/create-label', async (req, res) => {
 router.post('/analyze-email', async (req, res) => {
   try {
     const { emailContent } = req.body;
-    
+
     if (process.env.ENABLE_AI === 'false' || !process.env.OPENAI_API_KEY || process.env.OPENAI_API_KEY === 'sk-your-key-here') {
       return res.status(503).json({
         success: false,
@@ -122,14 +122,14 @@ router.post('/analyze-email', async (req, res) => {
     }
 
     const aiAnalyzer = new AILabelAnalyzerService(process.env.OPENAI_API_KEY);
-    
+
     // Check if it's job-related (for informational purposes)
     const jobCheck = await aiAnalyzer.isJobRelated(emailContent);
     const isJobRelated = jobCheck.success ? jobCheck.isJobRelated : false;
-    
+
     // Extract sender information
     const senderInfo = await aiAnalyzer.extractSenderInfo(emailContent);
-    
+
     // Always analyze for label suggestions regardless of job-related status
     const analysis = await aiAnalyzer.analyzeEmailForLabel(emailContent);
     if (!analysis.success) {
@@ -153,9 +153,9 @@ router.post('/analyze-email', async (req, res) => {
     });
   } catch (error) {
     console.error('Email analysis error:', error);
-    res.status(500).json({ 
+    res.status(500).json({
       success: false,
-      error: error.message 
+      error: error.message
     });
   }
 });
@@ -188,7 +188,7 @@ router.post('/scan', async (req, res) => {
     console.log(`📨 [scan] found ${messages.length} emails for query ${query}`);
 
     const results = [];
-    
+
     for (const message of messages) {
       try {
         const email = await gmailService.getEmail(message.id);
@@ -200,7 +200,7 @@ router.post('/scan', async (req, res) => {
           console.log(`↪️  [scan] skipped ${message.id} (cached-seen)`);
           continue;
         }
-        
+
         if (!email.body || email.body.length === 0) {
           results.push({ id: email.id, subject: email.subject, skipped: 'empty-body' });
           console.log(`↪️  [scan] skipped ${email.id} (empty-body)`);
@@ -219,10 +219,10 @@ router.post('/scan', async (req, res) => {
           } catch (e) {
             console.error(`[scan] apply custom label failed for ${email.id}:`, e.message);
           }
-          
-          results.push({ 
-            id: email.id, 
-            subject: email.subject, 
+
+          results.push({
+            id: email.id,
+            subject: email.subject,
             label: customResult.label,
             confidence: customResult.confidence,
             method: customResult.method,
@@ -307,7 +307,7 @@ router.post('/scan', async (req, res) => {
       } catch (err) {
         console.error(`❌ [scan] failed processing message ${message.id}:`, err.message);
         results.push({ id: message.id, skipped: 'error', error: err.message });
-        try { await seenCache.set(message.id, { skipped: 'error', error: err.message, at: Date.now() }, 2 * 60 * 60 * 1000); } catch {}
+        try { await seenCache.set(message.id, { skipped: 'error', error: err.message, at: Date.now() }, 2 * 60 * 60 * 1000); } catch { }
       }
     }
 
@@ -326,23 +326,47 @@ router.post('/scan', async (req, res) => {
     });
   } catch (error) {
     console.error('❌ [scan] error:', error);
-    res.status(500).json({ 
+    res.status(500).json({
       success: false,
-      error: error.message 
+      error: error.message
     });
   }
 });
 
-// Diagnostics: verify Gmail API permission by listing labels
-router.get('/diagnostics', async (req, res) => {
+/**
+ * POST /api/gmail/clear-cache
+ * Clear classification cache (useful after deploying new classifier logic)
+ */
+router.post('/clear-cache', async (req, res) => {
   try {
-    const gmailService = new GmailService(req.user.auth);
-    const gmail = gmailService.gmail;
-    const labels = await gmail.users.labels.list({ userId: 'me' });
-    res.json({ success: true, labelsCount: (labels.data.labels || []).length });
+    const fs = require('fs').promises;
+    const path = require('path');
+    const cacheFile = path.join(__dirname, '../data/cache-classify.json');
+
+    try {
+      await fs.unlink(cacheFile);
+      console.log('✅ Classification cache cleared');
+      res.json({
+        success: true,
+        message: 'Classification cache cleared successfully'
+      });
+    } catch (e) {
+      if (e.code === 'ENOENT') {
+        // File doesn't exist, that's fine
+        res.json({
+          success: true,
+          message: 'Cache file does not exist (already clear)'
+        });
+      } else {
+        throw e;
+      }
+    }
   } catch (error) {
-    console.error('[diagnostics][gmail] error:', error.message);
-    res.status(500).json({ success: false, error: error.message });
+    console.error('Clear cache error:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
   }
 });
 
@@ -508,7 +532,7 @@ router.post('/consolidate-application', async (req, res) => {
     }
 
     const OLD = [
-      'Application/Applied', 'Application/Application-Viewed', 'Application/Job-Alert', 
+      'Application/Applied', 'Application/Application-Viewed', 'Application/Job-Alert',
       'Applied', 'Application-Viewed', 'Job-Alert', 'Status-Update',
       'JobTrack/Applied', 'JobTrack/Application-Viewed', 'JobTrack/Job-Alert'
     ];
