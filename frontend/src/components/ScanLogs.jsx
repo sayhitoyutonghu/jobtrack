@@ -5,11 +5,17 @@ const ScanLogs = () => {
     const [scanLogs, setScanLogs] = useState([]);
     const [maxResults, setMaxResults] = useState(50);
     const [tempMaxResults, setTempMaxResults] = useState(50);
+    const [scanSource, setScanSource] = useState('inbox');
+    const [tempScanSource, setTempScanSource] = useState('inbox');
+    const [dateRange, setDateRange] = useState('7d');
+    const [tempDateRange, setTempDateRange] = useState('7d');
 
     // Load scan logs from localStorage on mount
     useEffect(() => {
         const savedLogs = localStorage.getItem('scan_logs');
         const savedMaxResults = localStorage.getItem('scan_max_results');
+        const savedScanSource = localStorage.getItem('scan_source');
+        const savedDateRange = localStorage.getItem('scan_date_range');
 
         if (savedLogs) {
             try {
@@ -23,6 +29,16 @@ const ScanLogs = () => {
             const max = parseInt(savedMaxResults, 10);
             setMaxResults(max);
             setTempMaxResults(max);
+        }
+
+        if (savedScanSource) {
+            setScanSource(savedScanSource);
+            setTempScanSource(savedScanSource);
+        }
+
+        if (savedDateRange) {
+            setDateRange(savedDateRange);
+            setTempDateRange(savedDateRange);
         }
     }, []);
 
@@ -39,9 +55,12 @@ const ScanLogs = () => {
                 emailsScanned: event.detail.emailsScanned || 0,
                 emailsFound: event.detail.emailsFound || 0,
                 query: event.detail.query || 'newer_than:7d',
+                scanSource: event.detail.scanSource || 'inbox',
+                dateRange: event.detail.dateRange || '7d',
                 success: event.detail.success || false,
                 error: event.detail.error || null,
-                emails: event.detail.emails || []
+                allEmails: event.detail.allEmails || [],
+                jobEmails: event.detail.jobEmails || []
             };
 
             console.log('[ScanLogs] Creating new log entry:', newLog);
@@ -61,14 +80,25 @@ const ScanLogs = () => {
         };
     }, []);
 
-    const handleSaveMaxResults = () => {
+    const handleSaveConfig = () => {
         setMaxResults(tempMaxResults);
+        setScanSource(tempScanSource);
+        setDateRange(tempDateRange);
+
         localStorage.setItem('scan_max_results', tempMaxResults.toString());
+        localStorage.setItem('scan_source', tempScanSource);
+        localStorage.setItem('scan_date_range', tempDateRange);
 
         // Dispatch event to update JobTrackBoard
-        window.dispatchEvent(new CustomEvent('updateMaxResults', {
-            detail: { maxResults: tempMaxResults }
+        window.dispatchEvent(new CustomEvent('updateScanConfig', {
+            detail: {
+                maxResults: tempMaxResults,
+                scanSource: tempScanSource,
+                dateRange: tempDateRange
+            }
         }));
+
+        console.log('[ScanLogs] Saved scan config:', { maxResults: tempMaxResults, scanSource: tempScanSource, dateRange: tempDateRange });
     };
 
     const clearLogs = () => {
@@ -122,32 +152,85 @@ const ScanLogs = () => {
                         <h2 className="text-xl font-black uppercase tracking-tight">Scan Configuration</h2>
                     </div>
 
-                    <div className="space-y-4">
+                    <div className="space-y-6">
+                        {/* Scan Source */}
                         <div>
-                            <label className="block text-sm font-bold mb-2 uppercase tracking-wide">
+                            <label className="block text-sm font-bold mb-3 uppercase tracking-wide">
+                                Scan Source
+                            </label>
+                            <div className="flex gap-4">
+                                <label className="flex items-center gap-2 cursor-pointer">
+                                    <input
+                                        type="radio"
+                                        name="scanSource"
+                                        value="inbox"
+                                        checked={tempScanSource === 'inbox'}
+                                        onChange={(e) => setTempScanSource(e.target.value)}
+                                        className="w-4 h-4 border-2 border-black"
+                                    />
+                                    <span className="font-mono text-sm">📥 Inbox</span>
+                                </label>
+                                <label className="flex items-center gap-2 cursor-pointer">
+                                    <input
+                                        type="radio"
+                                        name="scanSource"
+                                        value="unread"
+                                        checked={tempScanSource === 'unread'}
+                                        onChange={(e) => setTempScanSource(e.target.value)}
+                                        className="w-4 h-4 border-2 border-black"
+                                    />
+                                    <span className="font-mono text-sm">✉️ Unread Only</span>
+                                </label>
+                            </div>
+                        </div>
+
+                        {/* Date Range */}
+                        <div>
+                            <label className="block text-sm font-bold mb-3 uppercase tracking-wide">
+                                Date Range
+                            </label>
+                            <select
+                                value={tempDateRange}
+                                onChange={(e) => setTempDateRange(e.target.value)}
+                                className="w-full px-4 py-2 border-2 border-black font-mono text-sm focus:outline-none focus:ring-2 focus:ring-black"
+                            >
+                                <option value="7d">📅 Last 7 days</option>
+                                <option value="14d">📅 Last 14 days</option>
+                                <option value="30d">📅 Last 30 days</option>
+                                <option value="60d">📅 Last 60 days</option>
+                            </select>
+                        </div>
+
+                        {/* Max Results */}
+                        <div>
+                            <label className="block text-sm font-bold mb-3 uppercase tracking-wide">
                                 Max Results Per Scan
                             </label>
-                            <div className="flex gap-3 items-center">
-                                <input
-                                    type="number"
-                                    min="10"
-                                    max="500"
-                                    step="10"
-                                    value={tempMaxResults}
-                                    onChange={(e) => setTempMaxResults(parseInt(e.target.value, 10))}
-                                    className="flex-1 px-4 py-2 border-2 border-black font-mono text-sm focus:outline-none focus:ring-2 focus:ring-black"
-                                />
-                                <button
-                                    onClick={handleSaveMaxResults}
-                                    className="bg-black text-white px-6 py-2 font-bold uppercase tracking-wider border-2 border-black hover:bg-white hover:text-black transition-all shadow-[4px_4px_0px_0px_rgba(0,0,0,0.3)] hover:shadow-[2px_2px_0px_0px_rgba(0,0,0,0.3)] hover:translate-y-0.5"
-                                >
-                                    Save
-                                </button>
-                            </div>
-                            <p className="text-xs text-zinc-500 mt-2 font-mono">
-                                Current: {maxResults} emails per scan
+                            <input
+                                type="number"
+                                min="10"
+                                max="500"
+                                step="10"
+                                value={tempMaxResults}
+                                onChange={(e) => setTempMaxResults(parseInt(e.target.value, 10))}
+                                className="w-full px-4 py-2 border-2 border-black font-mono text-sm focus:outline-none focus:ring-2 focus:ring-black"
+                            />
+                        </div>
+
+                        {/* Current Settings Display */}
+                        <div className="pt-4 border-t-2 border-black/10">
+                            <p className="text-xs text-zinc-500 font-mono mb-1">
+                                <strong>Current:</strong> {scanSource === 'inbox' ? 'Inbox' : 'Unread'} • {dateRange} • {maxResults} emails
                             </p>
                         </div>
+
+                        {/* Save Button */}
+                        <button
+                            onClick={handleSaveConfig}
+                            className="w-full bg-black text-white px-6 py-3 font-bold uppercase tracking-wider border-2 border-black hover:bg-white hover:text-black transition-all shadow-[4px_4px_0px_0px_rgba(0,0,0,0.3)] hover:shadow-[2px_2px_0px_0px_rgba(0,0,0,0.3)] hover:translate-y-0.5"
+                        >
+                            💾 Save Configuration
+                        </button>
                     </div>
                 </div>
 
@@ -219,6 +302,9 @@ const ScanLogs = () => {
                                         <code className="ml-2 text-sm font-mono bg-zinc-100 px-2 py-1 border border-black">
                                             {log.query}
                                         </code>
+                                        <span className="ml-3 text-xs text-zinc-500">
+                                            ({log.scanSource === 'inbox' ? '📥 Inbox' : '✉️ Unread'} • {log.dateRange})
+                                        </span>
                                     </div>
 
                                     {log.error && (
@@ -227,31 +313,43 @@ const ScanLogs = () => {
                                         </div>
                                     )}
 
-                                    {/* Email List */}
-                                    {log.emails && log.emails.length > 0 && (
+                                    {/* All Emails List */}
+                                    {log.allEmails && log.allEmails.length > 0 && (
                                         <div className="mt-3">
                                             <div className="text-xs font-bold text-zinc-500 uppercase tracking-wide mb-2 flex items-center gap-2">
                                                 <Mail className="w-3 h-3" />
-                                                Emails Processed ({log.emails.length})
+                                                All Scanned Emails ({log.allEmails.length})
                                             </div>
-                                            <div className="space-y-2 max-h-60 overflow-y-auto">
-                                                {log.emails.slice(0, 10).map((email, idx) => (
+                                            <div className="space-y-2 max-h-80 overflow-y-auto border-2 border-zinc-200 p-2">
+                                                {log.allEmails.map((email, idx) => (
                                                     <div
                                                         key={idx}
-                                                        className="p-2 bg-zinc-50 border border-zinc-200 text-xs font-mono"
+                                                        className={`p-3 border-2 text-xs font-mono ${email.isJobEmail
+                                                                ? 'bg-green-50 border-green-600'
+                                                                : 'bg-zinc-50 border-zinc-300'
+                                                            }`}
                                                     >
-                                                        <div className="font-bold truncate">{email.company || 'Unknown'}</div>
-                                                        <div className="text-zinc-500 truncate">{email.role || 'Position'}</div>
-                                                        <div className="text-[10px] text-zinc-400 mt-1">
-                                                            Status: <span className="font-bold">{email.status}</span>
+                                                        <div className="flex items-start justify-between gap-2 mb-2">
+                                                            <div className="flex-1 min-w-0">
+                                                                <div className="font-bold truncate">{email.subject}</div>
+                                                                <div className="text-zinc-500 text-[10px] truncate mt-1">
+                                                                    From: {email.from}
+                                                                </div>
+                                                            </div>
+                                                            <div className={`shrink-0 px-2 py-1 text-[10px] font-bold border ${email.isJobEmail
+                                                                    ? 'bg-green-600 text-white border-green-700'
+                                                                    : 'bg-zinc-400 text-white border-zinc-500'
+                                                                }`}>
+                                                                {email.isJobEmail ? '✅ JOB' : '❌ OTHER'}
+                                                            </div>
                                                         </div>
+                                                        {email.isJobEmail && (
+                                                            <div className="text-[10px] text-green-700 mt-1">
+                                                                Classification: <span className="font-bold uppercase">{email.classification}</span>
+                                                            </div>
+                                                        )}
                                                     </div>
                                                 ))}
-                                                {log.emails.length > 10 && (
-                                                    <div className="text-xs text-zinc-400 text-center py-2 italic">
-                                                        ... and {log.emails.length - 10} more
-                                                    </div>
-                                                )}
                                             </div>
                                         </div>
                                     )}

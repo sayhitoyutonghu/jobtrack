@@ -547,26 +547,41 @@ export default function JobTrackBoard() {
         const saved = localStorage.getItem('scan_max_results');
         return saved ? parseInt(saved, 10) : 50;
     });
+    const [scanSource, setScanSource] = useState<string>(() => {
+        const saved = localStorage.getItem('scan_source');
+        return saved || 'inbox';
+    });
+    const [dateRange, setDateRange] = useState<string>(() => {
+        const saved = localStorage.getItem('scan_date_range');
+        return saved || '7d';
+    });
 
-    // Listen for maxResults updates from ScanLogs
+    // Listen for scan config updates from ScanLogs
     useEffect(() => {
-        const handleMaxResultsUpdate = (event: any) => {
+        const handleScanConfigUpdate = (event: any) => {
+            console.log('[JobTrackBoard] Scan config updated:', event.detail);
             setMaxResults(event.detail.maxResults);
+            setScanSource(event.detail.scanSource);
+            setDateRange(event.detail.dateRange);
         };
-        window.addEventListener('updateMaxResults', handleMaxResultsUpdate);
-        return () => window.removeEventListener('updateMaxResults', handleMaxResultsUpdate);
+        window.addEventListener('updateScanConfig', handleScanConfigUpdate);
+        return () => window.removeEventListener('updateScanConfig', handleScanConfigUpdate);
     }, []);
 
     const handleScan = async () => {
         setIsScanning(true);
         setScanMessage(null);
 
-        const query = "newer_than:7d";
+        // Build query based on configuration
+        const sourceQuery = scanSource === 'inbox' ? 'in:inbox' : 'is:unread';
+        const query = `${sourceQuery} newer_than:${dateRange}`;
+
         let scanSuccess = false;
         let scanError = null;
         let emailsScanned = 0;
         let emailsFound = 0;
         let processedEmails: Job[] = [];
+        let allScannedEmails: any[] = [];
 
         try {
             const sessionId = localStorage.getItem('session_id');
@@ -587,6 +602,18 @@ export default function JobTrackBoard() {
             if (data.success && data.results) {
                 emailsScanned = data.results.length;
 
+                // Process ALL emails and add classification info
+                allScannedEmails = data.results.map((r: any) => ({
+                    id: r.id,
+                    subject: r.subject || "No subject",
+                    from: r.from || "Unknown",
+                    date: r.date || new Date().toISOString(),
+                    isJobEmail: !r.skipped && !!r.label,
+                    classification: r.label || "not_classified",
+                    skipped: r.skipped || false
+                }));
+
+                // Extract only job emails for the board
                 const newJobs = data.results
                     .filter((r: any) => !r.skipped && r.label)
                     .map((r: any) => ({
@@ -639,8 +666,11 @@ export default function JobTrackBoard() {
                 emailsScanned: emailsScanned,
                 emailsFound: emailsFound,
                 query: query,
+                scanSource: scanSource,
+                dateRange: dateRange,
                 error: scanError,
-                emails: processedEmails
+                allEmails: allScannedEmails,
+                jobEmails: processedEmails
             };
 
             console.log('[JobTrackBoard] Dispatching scanComplete event:', eventDetail);
@@ -825,7 +855,7 @@ export default function JobTrackBoard() {
                         <span className="bg-black text-white px-3 py-1 text-2xl block transform -rotate-2 border-2 border-white shadow-[4px_4px_0px_0px_rgba(0,0,0,0.3)]">
                             #
                         </span>
-                        JobTrack_v1.0
+                        JobTrack_v2.0
                     </h1>
                     <p className="text-sm md:text-base font-bold opacity-60 uppercase tracking-widest ml-1">
                         Drag_and_Drop Interface // Secure_Mode
