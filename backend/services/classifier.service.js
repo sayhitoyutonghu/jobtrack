@@ -95,35 +95,52 @@ Categories:
 Instructions:
 1. Base decisions on full email content. Use subject and summary if content is missing.
 2. First check if job-related; return "other" if not.
-3. If about interview scheduling/confirmation, classify as "interview".
-4. If mentions offer/package/compensation/onboarding, classify as "offer".
-5. If application rejected or not selected, classify as "rejected".
-6. If about application or status updates, classify as "application".
-7. If self-sent and no response for long time, classify as "ghost".
-8. If introducing new recruiter/headhunter, classify as "application".
-9. For general news/marketing/newsletters/updates, classify as "other".
-10. If contains unsubscribe/preferences/newsletter/daily update, prioritize as "other".
-11. Must output only one category: application/interview/offer/rejected/ghost/other.
+3. **IMPORTANT**: If email is just a reminder to complete/finish application (not confirmation), classify as "other".
+4. If email confirms application was RECEIVED/SUBMITTED, classify as "application".
+5. If about interview scheduling/confirmation, classify as "interview".
+6. If mentions offer/package/compensation/onboarding, classify as "offer".
+7. If application rejected or not selected, classify as "rejected".
+8. If self-sent and no response for long time, classify as "ghost".
+9. If introducing new recruiter/headhunter, classify as "application".
+10. For general news/marketing/newsletters/updates, classify as "other".
+11. If contains unsubscribe/preferences/newsletter/daily update, prioritize as "other".
+12. Must output only one category: application/interview/offer/rejected/ghost/other.
 
 Examples:
 - Example 1 → "application":
   Subject: "Your application was received"
   Body: "Thank you for applying. Our team will review your resume."
-- Example 2 → "interview":
+  
+- Example 2 → "other":
+  Subject: "Don't forget to complete your application to Informa"
+  Body: "Almost there! We saved your application for you. Click to continue."
+  Reason: This is a reminder to complete, not a confirmation of submission.
+  
+- Example 3 → "other":
+  Subject: "The Morning: E-bike injuries"
+  Body: "Today's news roundup from The New York Times..."
+  Reason: Newsletter, not job-related.
+  
+- Example 4 → "application":
+  Subject: "Your application as Junior Graphic Designer"
+  Body: "We have received your job application and will begin our review process..."
+  Reason: Confirmation that application was received.
+  
+- Example 5 → "interview":
   Subject: "Interview availability"
   Body: "We would like to schedule a technical interview next week."
-- Example 3 → "offer":
+  
+- Example 6 → "offer":
   Subject: "Offer details"
   Body: "We are pleased to offer you the position with a starting salary..."
-- Example 4 → "rejected":
+  
+- Example 7 → "rejected":
   Subject: "Application update"
   Body: "We appreciate your interest but will not move forward."
-- Example 5 → "application":
+  
+- Example 8 → "application":
   Subject: "Intro: You x Recruiter"
   Body: "Let me introduce you to our recruiter who is hiring for several roles."
-- Example 6 → "other":
-  Subject: "LinkedIn Newsletter: Design Trends"
-  Body: "Stay updated with the latest industry news..."
 
 Email to classify:
 Subject: "${safe(email.subject)}"
@@ -247,6 +264,74 @@ Respond with only one label (lowercase).`;
   }
 
   /**
+   * Check if this is a newsletter email
+   */
+  isNewsletter(email) {
+    const subject = (email.subject || '').toLowerCase();
+    const from = (email.from || '').toLowerCase();
+    const body = (email.body || '').toLowerCase();
+
+    // Newsletter keywords in subject
+    const NEWSLETTER_KEYWORDS = [
+      'newsletter', 'daily update', 'weekly digest',
+      'morning briefing', 'news roundup', 'the morning',
+      'today\'s news', 'breaking news', 'latest news',
+      'daily digest', 'weekly roundup'
+    ];
+
+    // News/media organizations
+    const NEWS_SENDERS = [
+      '@nytimes.com', '@wsj.com', '@ft.com', '@bloomberg.com',
+      '@economist.com', '@reuters.com', '@apnews.com',
+      '@substack.com', '@medium.com', '@news.', '@newsletter.',
+      'nytdirect@', 'newsletters@'
+    ];
+
+    // Unsubscribe link (strong indicator of newsletter)
+    const hasUnsubscribe = body.includes('unsubscribe') ||
+      body.includes('manage preferences') ||
+      body.includes('update your preferences');
+
+    const isNewsletter = NEWSLETTER_KEYWORDS.some(k => subject.includes(k)) ||
+      NEWS_SENDERS.some(s => from.includes(s));
+
+    // If has unsubscribe and not job-related, it's likely a newsletter
+    if (hasUnsubscribe && !this.isJobRelated(email)) {
+      return true;
+    }
+
+    return isNewsletter;
+  }
+
+  /**
+   * Check if this is a LinkedIn reminder email (not an application confirmation)
+   */
+  isLinkedInReminder(email) {
+    const subject = (email.subject || '').toLowerCase();
+    const from = (email.from || '').toLowerCase();
+    const body = (email.body || '').toLowerCase();
+
+    const isFromLinkedIn = from.includes('linkedin') ||
+      from.includes('jobs-noreply@linkedin.com');
+
+    if (!isFromLinkedIn) return false;
+
+    // Reminder patterns (NOT confirmations)
+    const REMINDER_PATTERNS = [
+      /don't forget to (complete|finish)/i,
+      /complete your application/i,
+      /finish your application/i,
+      /almost there/i,
+      /we saved your application/i,
+      /continue (your )?application/i,
+      /resume (your )?application/i
+    ];
+
+    const text = `${subject} ${body}`;
+    return REMINDER_PATTERNS.some(pattern => pattern.test(text));
+  }
+
+  /**
    * Check if this is an outbound job application email
    */
   isOutboundJobApplication(email) {
@@ -323,6 +408,18 @@ Respond with only one label (lowercase).`;
 
     // Skip finance/receipt emails
     if (this.isFinanceReceipt(email)) {
+      return null;
+    }
+
+    // Skip newsletters
+    if (this.isNewsletter(email)) {
+      console.log('⏭️  Skipping newsletter email');
+      return null;
+    }
+
+    // Skip LinkedIn reminders (not actual application confirmations)
+    if (this.isLinkedInReminder(email)) {
+      console.log('⏭️  Skipping LinkedIn reminder email');
       return null;
     }
 
