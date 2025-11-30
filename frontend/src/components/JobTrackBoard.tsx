@@ -375,6 +375,82 @@ const JobDetailsModal = ({ job, onClose, onDelete }: { job: Job; onClose: () => 
 };
 
 /**
+ * System Check List Component - Neo-Brutalist Terminal Style
+ */
+interface SystemCheckListProps {
+    steps: string[];
+    className?: string;
+}
+
+const SystemCheckList = ({ steps, className }: SystemCheckListProps) => {
+    const [visibleSteps, setVisibleSteps] = useState<number>(0);
+
+    useEffect(() => {
+        // Progressive reveal animation
+        if (visibleSteps < steps.length) {
+            const timer = setTimeout(() => {
+                setVisibleSteps(prev => prev + 1);
+            }, 300); // Delay between each step appearing
+            return () => clearTimeout(timer);
+        }
+    }, [visibleSteps, steps.length]);
+
+    return (
+        <div className={cn("font-mono text-sm", className)}>
+            <div className="border-2 border-black bg-zinc-900 text-green-400 p-4 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]">
+                {/* Terminal Header */}
+                <div className="flex items-center gap-2 mb-3 pb-2 border-b border-green-400/30">
+                    <span className="w-2 h-2 bg-red-500 border border-black"></span>
+                    <span className="w-2 h-2 bg-yellow-500 border border-black"></span>
+                    <span className="w-2 h-2 bg-green-500 border border-black"></span>
+                    <span className="ml-2 text-xs opacity-70">SYSTEM_INIT.LOG</span>
+                </div>
+
+                {/* Steps */}
+                <div className="space-y-2">
+                    {steps.map((step, index) => {
+                        const isVisible = index < visibleSteps;
+                        const stepNumber = String(index + 1).padStart(2, '0');
+
+                        return (
+                            <div
+                                key={index}
+                                className={cn(
+                                    "flex items-start gap-3 transition-all duration-300",
+                                    isVisible ? "opacity-100 translate-x-0" : "opacity-0 -translate-x-4"
+                                )}
+                            >
+                                {/* Status Indicator */}
+                                <span className={cn(
+                                    "shrink-0 w-4 h-4 border-2 border-green-400 flex items-center justify-center text-[10px]",
+                                    isVisible && "bg-green-400 text-black animate-pulse"
+                                )}>
+                                    {isVisible && "✓"}
+                                </span>
+
+                                {/* Step Content */}
+                                <div className="flex-1">
+                                    <span className="text-green-400/60">&gt; {stepNumber}.</span>{" "}
+                                    <span className="text-green-400">{step}</span>
+                                    {isVisible && <span className="animate-blink ml-1">_</span>}
+                                </div>
+                            </div>
+                        );
+                    })}
+                </div>
+
+                {/* Footer Status */}
+                {visibleSteps === steps.length && (
+                    <div className="mt-4 pt-3 border-t border-green-400/30 text-xs opacity-70 animate-fade-in">
+                        <span className="text-green-400">[OK]</span> System ready. All checks passed.
+                    </div>
+                )}
+            </div>
+        </div>
+    );
+};
+
+/**
  * 主看板组件
  */
 // Helper functions for Gmail data conversion
