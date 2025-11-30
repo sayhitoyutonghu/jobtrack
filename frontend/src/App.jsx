@@ -181,26 +181,22 @@ const JobEmailCategorizationApp = () => {
 
       {/* Main Content */}
       <main className="flex-1 w-full h-full overflow-hidden bg-zinc-50 relative">
-        {view === 'board' && (
-          <div className="h-full w-full">
-            <JobTrackBoard />
-          </div>
-        )}
+        <div className={view === 'board' ? 'h-full w-full' : 'hidden'}>
+          <JobTrackBoard />
+        </div>
 
-        {view === 'labels' && (
-          <div className="p-8 max-w-5xl mx-auto">
-            <Dashboard
-              labels={labels}
-              loading={labelsLoading}
-              onRefresh={loadLabels}
-              onToggleUpdate={handleLabelToggleUpdate}
-            />
-          </div>
-        )}
+        <div className={view === 'labels' ? 'p-8 max-w-5xl mx-auto h-full overflow-y-auto' : 'hidden'}>
+          <Dashboard
+            labels={labels}
+            loading={labelsLoading}
+            onRefresh={loadLabels}
+            onToggleUpdate={handleLabelToggleUpdate}
+          />
+        </div>
 
-        {view === 'scanlogs' && (
+        <div className={view === 'scanlogs' ? 'h-full w-full' : 'hidden'}>
           <ScanLogs />
-        )}
+        </div>
       </main>
     </div>
   );

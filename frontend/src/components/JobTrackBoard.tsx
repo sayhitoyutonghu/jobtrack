@@ -634,15 +634,18 @@ export default function JobTrackBoard() {
             setIsScanning(false);
 
             // Emit scan event for logging
+            const eventDetail = {
+                success: scanSuccess,
+                emailsScanned: emailsScanned,
+                emailsFound: emailsFound,
+                query: query,
+                error: scanError,
+                emails: processedEmails
+            };
+
+            console.log('[JobTrackBoard] Dispatching scanComplete event:', eventDetail);
             window.dispatchEvent(new CustomEvent('scanComplete', {
-                detail: {
-                    success: scanSuccess,
-                    emailsScanned: emailsScanned,
-                    emailsFound: emailsFound,
-                    query: query,
-                    error: scanError,
-                    emails: processedEmails
-                }
+                detail: eventDetail
             }));
         }
     };

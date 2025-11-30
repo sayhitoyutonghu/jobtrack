@@ -28,7 +28,11 @@ const ScanLogs = () => {
 
     // Listen for new scan events from JobTrackBoard
     useEffect(() => {
+        console.log('[ScanLogs] Setting up scanComplete event listener');
+
         const handleScanComplete = (event) => {
+            console.log('[ScanLogs] Received scanComplete event:', event.detail);
+
             const newLog = {
                 id: Date.now(),
                 timestamp: new Date().toISOString(),
@@ -40,15 +44,21 @@ const ScanLogs = () => {
                 emails: event.detail.emails || []
             };
 
+            console.log('[ScanLogs] Creating new log entry:', newLog);
+
             setScanLogs(prev => {
                 const updated = [newLog, ...prev].slice(0, 50); // Keep last 50 logs
                 localStorage.setItem('scan_logs', JSON.stringify(updated));
+                console.log('[ScanLogs] Updated scan logs, total:', updated.length);
                 return updated;
             });
         };
 
         window.addEventListener('scanComplete', handleScanComplete);
-        return () => window.removeEventListener('scanComplete', handleScanComplete);
+        return () => {
+            console.log('[ScanLogs] Removing scanComplete event listener');
+            window.removeEventListener('scanComplete', handleScanComplete);
+        };
     }, []);
 
     const handleSaveMaxResults = () => {
