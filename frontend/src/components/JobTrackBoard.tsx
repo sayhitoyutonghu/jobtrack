@@ -543,15 +543,36 @@ export default function JobTrackBoard() {
     const [isScanning, setIsScanning] = useState(false);
     const [scanMessage, setScanMessage] = useState<string | null>(null);
     const [lastScanTime, setLastScanTime] = useState<Date | null>(null);
+    const [maxResults, setMaxResults] = useState<number>(() => {
+        const saved = localStorage.getItem('scan_max_results');
+        return saved ? parseInt(saved, 10) : 50;
+    });
+
+    // Listen for maxResults updates from ScanLogs
+    useEffect(() => {
+        const handleMaxResultsUpdate = (event: any) => {
+            setMaxResults(event.detail.maxResults);
+        };
+        window.addEventListener('updateMaxResults', handleMaxResultsUpdate);
+        return () => window.removeEventListener('updateMaxResults', handleMaxResultsUpdate);
+    }, []);
 
     const handleScan = async () => {
         setIsScanning(true);
         setScanMessage(null);
 
+        const query = "newer_than:7d";
+        let scanSuccess = false;
+        let scanError = null;
+        let emailsScanned = 0;
+        let emailsFound = 0;
+        let processedEmails: Job[] = [];
+
         try {
             const sessionId = localStorage.getItem('session_id');
             if (!sessionId) {
-                setScanMessage("⚠️ Please sign in with Google first");
+                scanError = "Please sign in with Google first";
+                setScanMessage("⚠️ " + scanError);
                 setTimeout(() => setScanMessage(null), 3000);
                 setIsScanning(false);
                 return;
@@ -559,11 +580,13 @@ export default function JobTrackBoard() {
 
             // Use gmailApi which handles authentication headers automatically
             const data = await gmailApi.scanEmails({
-                maxResults: 50,
-                query: "newer_than:7d" // Scan all emails from last 7 days, not just unread
+                maxResults: maxResults,
+                query: query
             });
 
             if (data.success && data.results) {
+                emailsScanned = data.results.length;
+
                 const newJobs = data.results
                     .filter((r: any) => !r.skipped && r.label)
                     .map((r: any) => ({
@@ -578,6 +601,9 @@ export default function JobTrackBoard() {
                         emailSnippet: r.subject || "No subject"
                     }));
 
+                emailsFound = newJobs.length;
+                processedEmails = newJobs;
+
                 setJobs(prevJobs => {
                     const existingIds = new Set(prevJobs.map(j => j.id));
                     const uniqueNewJobs = newJobs.filter((j: Job) => !existingIds.has(j.id));
@@ -585,23 +611,39 @@ export default function JobTrackBoard() {
                 });
 
                 setLastScanTime(new Date());
+                scanSuccess = true;
                 setScanMessage(`✓ Found ${newJobs.length} job email${newJobs.length !== 1 ? 's' : ''}!`);
                 setTimeout(() => setScanMessage(null), 5000);
             } else {
+                scanSuccess = true;
                 setScanMessage("No new emails found");
                 setTimeout(() => setScanMessage(null), 3000);
             }
         } catch (e: any) {
             console.error("Scan failed", e);
+            scanError = e.message || "Network error";
             if (e.response?.status === 401) {
-                setScanMessage("⚠️ Session expired - please sign in again");
+                scanError = "Session expired - please sign in again";
+                setScanMessage("⚠️ " + scanError);
                 localStorage.removeItem('session_id');
             } else {
-                setScanMessage("❌ Scan failed - " + (e.message || "Network error"));
+                setScanMessage("❌ Scan failed - " + scanError);
             }
             setTimeout(() => setScanMessage(null), 3000);
         } finally {
             setIsScanning(false);
+
+            // Emit scan event for logging
+            window.dispatchEvent(new CustomEvent('scanComplete', {
+                detail: {
+                    success: scanSuccess,
+                    emailsScanned: emailsScanned,
+                    emailsFound: emailsFound,
+                    query: query,
+                    error: scanError,
+                    emails: processedEmails
+                }
+            }));
         }
     };
 
@@ -630,7 +672,7 @@ export default function JobTrackBoard() {
 
                 // Fetch recent labeled emails using gmailApi
                 const data = await gmailApi.scanEmails({
-                    maxResults: 50,
+                    maxResults: maxResults,
                     query: "newer_than:7d" // Reduced from 30d to 7d for faster loading
                 });
 

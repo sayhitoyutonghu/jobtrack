@@ -12,11 +12,12 @@ import {
 } from 'lucide-react';
 import Dashboard from './Dashboard.jsx';
 import JobTrackBoard from './components/JobTrackBoard';
+import ScanLogs from './components/ScanLogs';
 import { authApi, gmailApi } from './api/client.js';
 import './App.css';
 
 const JobEmailCategorizationApp = () => {
-  const [view, setView] = useState('board'); // 'board', 'labels', 'autoscan'
+  const [view, setView] = useState('board'); // 'board', 'labels', 'scanlogs'
   const [labels, setLabels] = useState([]);
   const [labelsLoading, setLabelsLoading] = useState(true);
   const [labelsError, setLabelsError] = useState(null);
@@ -151,11 +152,11 @@ const JobEmailCategorizationApp = () => {
             <span>Label Management</span>
           </button>
           <button
-            onClick={() => setView('autoscan')}
-            className={`w-full flex items-center gap-3 px-3 py-2 text-sm font-medium rounded-md transition-colors ${view === 'autoscan' ? 'bg-black text-white' : 'text-zinc-600 hover:bg-zinc-100'}`}
+            onClick={() => setView('scanlogs')}
+            className={`w-full flex items-center gap-3 px-3 py-2 text-sm font-medium rounded-md transition-colors ${view === 'scanlogs' ? 'bg-black text-white' : 'text-zinc-600 hover:bg-zinc-100'}`}
           >
             <RefreshCcw size={18} />
-            <span>Auto Scan</span>
+            <span>Scan Logs</span>
           </button>
         </nav>
 
@@ -197,18 +198,8 @@ const JobEmailCategorizationApp = () => {
           </div>
         )}
 
-        {view === 'autoscan' && (
-          <div className="p-8 max-w-3xl mx-auto">
-            <div className="bg-white p-6 rounded-lg border border-zinc-200 shadow-sm">
-              <h2 className="text-lg font-bold mb-4">Auto Scan Settings</h2>
-              <p className="text-zinc-600 mb-6">Configure automatic email scanning intervals and rules.</p>
-
-              <div className="p-4 bg-yellow-50 text-yellow-800 rounded-md border border-yellow-200 text-sm">
-                <p className="font-bold flex items-center gap-2"><AlertCircle size={16} /> Feature Under Maintenance</p>
-                <p className="mt-1">The auto-scan configuration is currently being migrated to the new backend system.</p>
-              </div>
-            </div>
-          </div>
+        {view === 'scanlogs' && (
+          <ScanLogs />
         )}
       </main>
     </div>
