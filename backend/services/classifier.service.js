@@ -287,18 +287,9 @@ Respond with only one label (lowercase).`;
       'nytdirect@', 'newsletters@'
     ];
 
-    // Unsubscribe link (strong indicator of newsletter)
-    const hasUnsubscribe = body.includes('unsubscribe') ||
-      body.includes('manage preferences') ||
-      body.includes('update your preferences');
-
+    // Check newsletter keywords or news senders
     const isNewsletter = NEWSLETTER_KEYWORDS.some(k => subject.includes(k)) ||
       NEWS_SENDERS.some(s => from.includes(s));
-
-    // If has unsubscribe and not job-related, it's likely a newsletter
-    if (hasUnsubscribe && !this.isJobRelated(email)) {
-      return true;
-    }
 
     return isNewsletter;
   }
