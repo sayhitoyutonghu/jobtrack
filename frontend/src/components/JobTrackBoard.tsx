@@ -294,22 +294,7 @@ const JobDetailsModal = ({ job, onClose, onDelete, onSave }: { job: Job; onClose
                 onClick={(e) => e.stopPropagation()}
             >
                 <div className="absolute top-4 right-4 flex gap-2">
-                    {isEditing ? (
-                        <>
-                            <button
-                                onClick={handleSave}
-                                className="p-2 bg-green-600 text-white hover:bg-green-700 border-2 border-black transition-colors font-bold text-xs uppercase"
-                            >
-                                Save
-                            </button>
-                            <button
-                                onClick={handleCancel}
-                                className="p-2 bg-red-600 text-white hover:bg-red-700 border-2 border-black transition-colors font-bold text-xs uppercase"
-                            >
-                                Cancel
-                            </button>
-                        </>
-                    ) : (
+                    {!isEditing && (
                         <button
                             onClick={() => setIsEditing(true)}
                             className="p-2 hover:bg-black hover:text-white border-2 border-transparent hover:border-black transition-colors"
@@ -461,7 +446,7 @@ const JobDetailsModal = ({ job, onClose, onDelete, onSave }: { job: Job; onClose
                 </div>
 
                 {/* Action Buttons */}
-                <div className="mt-8 pt-6 border-t-2 border-black flex justify-end gap-4">
+                <div className="mt-8 pt-6 border-t-2 border-black flex justify-between items-center">
                     <button
                         onClick={() => {
                             // Delete the job (same as dragging to trash)
@@ -473,9 +458,32 @@ const JobDetailsModal = ({ job, onClose, onDelete, onSave }: { job: Job; onClose
                         <span>🗑️</span>
                         DELETE
                     </button>
-                    <button className="px-6 py-2 bg-black text-white border-2 border-black font-bold hover:bg-zinc-800 transition-colors shadow-[4px_4px_0px_0px_rgba(0,0,0,0.2)] hover:translate-y-0.5 hover:shadow-[2px_2px_0px_0px_rgba(0,0,0,0.2)]">
-                        OPEN IN GMAIL
-                    </button>
+
+                    <div className="flex gap-4">
+                        <button
+                            onClick={() => window.open(`https://mail.google.com/mail/u/0/#inbox/${job.id}`, '_blank')}
+                            className="px-6 py-2 bg-black text-white border-2 border-black font-bold hover:bg-zinc-800 transition-colors shadow-[4px_4px_0px_0px_rgba(0,0,0,0.2)] hover:translate-y-0.5 hover:shadow-[2px_2px_0px_0px_rgba(0,0,0,0.2)]"
+                        >
+                            OPEN IN GMAIL
+                        </button>
+
+                        {isEditing && (
+                            <>
+                                <button
+                                    onClick={handleCancel}
+                                    className="px-6 py-2 bg-red-600 text-white border-2 border-black font-bold hover:bg-red-700 transition-colors shadow-[4px_4px_0px_0px_rgba(0,0,0,0.2)] hover:translate-y-0.5 hover:shadow-[2px_2px_0px_0px_rgba(0,0,0,0.2)]"
+                                >
+                                    CANCEL
+                                </button>
+                                <button
+                                    onClick={handleSave}
+                                    className="px-6 py-2 bg-green-600 text-white border-2 border-black font-bold hover:bg-green-700 transition-colors shadow-[4px_4px_0px_0px_rgba(0,0,0,0.2)] hover:translate-y-0.5 hover:shadow-[2px_2px_0px_0px_rgba(0,0,0,0.2)]"
+                                >
+                                    SAVE
+                                </button>
+                            </>
+                        )}
+                    </div>
                 </div>
             </div>
         </div>
