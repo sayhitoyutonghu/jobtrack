@@ -558,7 +558,7 @@ Respond with only one label (lowercase).`;
       // Offer: require stronger patterns to avoid generic "special offer" matches
       { pattern: /(job offer|offer letter|offer details|accept (the )?offer|start date|compensation|onboarding)/, category: 'offer' },
       // Rejection - expanded patterns
-      { pattern: /(reject|not (be )?moving forward|no longer moving forward|decline your application|will not be moving forward|unfortunately.*not)/, category: 'rejected' }  // UPDATED: added "will not be moving forward"
+      { pattern: /(reject|not (be |to )?moving forward|no longer moving forward|decline your application|will not be moving forward|unfortunately.*not)/, category: 'rejected' }  // UPDATED: added "not to move forward" support
     ];
 
     for (const rule of phraseRules) {

@@ -1013,9 +1013,50 @@ export default function JobTrackBoard() {
     };
 
     const onDragEnd = (event: DragEndEvent) => {
+        const { active, over } = event;
         setActiveJob(null);
-        // Final reordering logic is partly handled in DragOver for smoothness,
-        // but you could do API calls here.
+
+        if (!over) return;
+
+        const activeId = active.id as string;
+        const overId = over.id as string;
+
+        // Find the job and its new status
+        const job = jobs.find(j => j.id === activeId);
+        if (!job) return;
+
+        // If dropped on a column, the new status is the column ID
+        // If dropped on another job, the new status is that job's status
+        let newStatus: Status | undefined;
+
+        if (over.data.current?.type === "Column") {
+            newStatus = over.id as Status;
+        } else if (over.data.current?.type === "Job") {
+            const overJob = jobs.find(j => j.id === overId);
+            if (overJob) {
+                newStatus = overJob.status;
+            }
+        }
+
+        // If status changed, persist it
+        if (newStatus && newStatus !== job.status && newStatus !== "Trash") {
+            // 1. Update savedJobsRef immediately to prevent reversion on re-render/fetch
+            if (savedJobsRef.current) {
+                savedJobsRef.current = {
+                    ...savedJobsRef.current,
+                    [job.id]: {
+                        ...savedJobsRef.current[job.id],
+                        status: newStatus
+                    }
+                };
+            }
+
+            // 2. Persist to backend
+            jobsApi.update(job.id, { status: newStatus }).catch(err => {
+                console.error("Failed to persist drag and drop status change:", err);
+                // Optionally revert UI here if needed, but for now we trust optimistic update
+            });
+        }
     };
 
     // Custom Drop Animation to remove blur and keep crisp edges
