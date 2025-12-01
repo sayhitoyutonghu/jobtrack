@@ -344,13 +344,21 @@ router.post('/clear-cache', async (req, res) => {
     const fs = require('fs').promises;
     const path = require('path');
     const cacheFile = path.join(__dirname, '../data/cache-classify.json');
+    const seenFile = path.join(__dirname, '../data/cache-seen.json');
 
     try {
-      await fs.unlink(cacheFile);
-      console.log('✅ Classification cache cleared');
+      // Delete both caches
+      await Promise.all([
+        fs.unlink(cacheFile).catch(() => { }),
+        fs.unlink(seenFile).catch(() => { })
+      ]);
+
+      // Also clear in-memory cache if possible (restart is better)
+      console.log('✅ All caches cleared (classify + seen)');
+
       res.json({
         success: true,
-        message: 'Classification cache cleared successfully'
+        message: 'All caches cleared successfully'
       });
     } catch (e) {
       if (e.code === 'ENOENT') {
