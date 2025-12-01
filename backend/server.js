@@ -30,7 +30,7 @@ const app = express();
 
 // CORS configuration for frontend communication
 app.use(cors({
- origin: [process.env.FRONTEND_URL || 'http://localhost:5173', 'https://jobtrack-7xplmq5l5-sayhitoyutonghu-projects.vercel.app', /\.vercel\.app$/],
+  origin: [process.env.FRONTEND_URL || 'http://localhost:5173', 'https://jobtrack-7xplmq5l5-sayhitoyutonghu-projects.vercel.app', /\.vercel\.app$/],
 
   credentials: true
 }));
@@ -59,11 +59,11 @@ function resolveSession(sessionId) {
   // First check in-memory cache for fast access
   let session = sessions.get(sessionId);
   if (session) return session;
-  
+
   // If not in memory, try to load from disk storage
   const stored = getSession(sessionId);
   if (!stored) return null;
-  
+
   // Rebuild session structure and cache in memory
   const rebuilt = {
     auth: stored.auth,
@@ -97,14 +97,14 @@ app.get('/auth/google', (req, res) => {
     ],
     prompt: 'consent'
   });
-  
+
   console.log('🔐 Redirecting to Google OAuth...');
   res.redirect(authUrl);
 });
 
 app.get('/auth/callback', async (req, res) => {
   const { code, error } = req.query;
-  
+
   if (error) {
     console.error('❌ OAuth error:', error);
     return res.redirect('https://jobtrack-zeta.vercel.app?error=auth_failed');
@@ -134,13 +134,13 @@ app.get('/auth/callback', async (req, res) => {
     sessions.set(sessionId, { auth: userAuth, tokens, createdAt: new Date() });
     // Persist to disk
     saveSession(sessionId, tokens);
-    
+
     // 自动添加到管理器并启动扫描
     await autoManager.addSession(sessionId, tokens);
 
     console.log('✅ Authentication successful!');
     console.log(`📝 Session ID: ${sessionId}`);
-    
+
     return res.redirect('https://jobtrack-zeta.vercel.app?session=' + sessionId);
   } catch (error) {
     console.error('❌ Token exchange failed:', error);
@@ -176,7 +176,7 @@ app.get('/auth/status', (req, res) => {
 const requireAuth = (req, res, next) => {
   const sessionId = req.headers['x-session-id'];
   if (!sessionId) {
-    return res.status(401).json({ 
+    return res.status(401).json({
       error: 'No session ID provided',
       message: 'Please authenticate first by visiting /auth/google'
     });
@@ -184,7 +184,7 @@ const requireAuth = (req, res, next) => {
   // Resolve from memory or disk
   const session = resolveSession(sessionId);
   if (!session) {
-    return res.status(401).json({ 
+    return res.status(401).json({
       error: 'Invalid or expired session',
       message: 'Please re-authenticate by visiting /auth/google'
     });
@@ -248,8 +248,8 @@ app.post('/api/auto-manager/auto-start/:enabled', (req, res) => {
 });
 
 app.get('/health', (req, res) => {
-  res.json({ 
-    status: 'ok', 
+  res.json({
+    status: 'ok',
     timestamp: new Date(),
     sessions: sessions.size,
     environment: process.env.NODE_ENV
@@ -261,7 +261,7 @@ app.get('/health/detailed', (req, res) => {
   try {
     const autoScanService = require('./services/autoscan.service');
     const autoScan = new autoScanService({ intervalMs: 300000, resolveSession: global.__resolveSession });
-    
+
     res.json({
       status: 'ok',
       timestamp: new Date(),
@@ -347,6 +347,12 @@ app.listen(PORT, '0.0.0.0', async () => {
   console.log(`Login: http://0.0.0.0:${PORT}/auth/google`);
   console.log(`Health: http://0.0.0.0:${PORT}/health`);
   console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n');
+
+  if (process.env.GEMINI_API_KEY) {
+    console.log('✓ GEMINI_API_KEY found in environment');
+  } else {
+    console.error('❌ GEMINI_API_KEY NOT found in environment');
+  }
   // Ensure label-config exists with sane defaults if missing
   try {
     const fs = require('fs');
@@ -387,14 +393,14 @@ app.listen(PORT, '0.0.0.0', async () => {
   } catch (e) {
     console.warn('[init] Failed ensuring label-config.json:', e.message);
   }
-  
+
   if (!process.env.GOOGLE_CLIENT_ID || process.env.GOOGLE_CLIENT_ID === 'your_client_id') {
     console.warn('⚠️  WARNING: GOOGLE_CLIENT_ID not configured in .env');
   }
   if (!process.env.GOOGLE_CLIENT_SECRET) {
     console.warn('⚠️  WARNING: GOOGLE_CLIENT_SECRET not configured in .env');
   }
-  
+
   // 启动自动管理器
   try {
     await autoManager.start();
