@@ -27,10 +27,12 @@ class EmailClassifier {
   constructor(options = {}) {
     this.useOpenAI = false;
     this.useAnthropic = false;
+    this.useGemini = false;
 
     const {
       openaiApiKey = process.env.OPENAI_API_KEY,
       anthropicApiKey = process.env.ANTHROPIC_API_KEY,
+      geminiApiKey = process.env.GEMINI_API_KEY,
       enableAI = true
     } = options;
 
@@ -56,7 +58,19 @@ class EmailClassifier {
       }
     }
 
-    if (!this.useOpenAI && !this.useAnthropic) {
+    if (enableAI && geminiApiKey && geminiApiKey !== 'your-gemini-key') {
+      try {
+        const { GoogleGenerativeAI } = require("@google/generative-ai");
+        this.genAI = new GoogleGenerativeAI(geminiApiKey);
+        this.geminiModel = this.genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+        this.useGemini = true;
+        console.log('✓ Gemini classification enabled');
+      } catch (error) {
+        console.error('⚠ Failed to initialize Gemini SDK:', error.message);
+      }
+    }
+
+    if (!this.useOpenAI && !this.useAnthropic && !this.useGemini) {
       console.log('⚠ AI disabled (no valid API key provided)');
     }
   }
@@ -237,6 +251,29 @@ Respond with only one label (lowercase).`;
       });
     } catch (error) {
       console.error('Anthropic classification failed:', error.message);
+      return null;
+    }
+  }
+
+  async classifyWithGemini(prompt) {
+    if (!this.useGemini) return null;
+
+    try {
+      const result = await this.geminiModel.generateContent(prompt);
+      const response = await result.response;
+      const text = response.text();
+
+      const category = this.parseCategory(text);
+      if (!category) {
+        console.warn('[classifier][gemini] Invalid category:', text);
+        return null;
+      }
+
+      return this.createResult(category, 'medium', 'gemini-ai', {
+        rawResponse: text
+      });
+    } catch (error) {
+      console.error('Gemini classification failed:', error.message);
       return null;
     }
   }
@@ -487,28 +524,30 @@ Respond with only one label (lowercase).`;
       }
     }
 
-    // Fall back to AI classification
-    if (this.useOpenAI || this.useAnthropic) {
-      try {
-        const prompt = this.buildPrompt(email);
+    // 3. AI Classification (fallback if no keyword match)
+    // 3. AI Classification (fallback if no keyword match)
+    if (this.enableAI) {
+      const prompt = this.buildPrompt(email);
+      let aiResult = null;
 
-        if (this.useOpenAI) {
-          const result = await this.classifyWithOpenAI(prompt);
-          if (result) {
-            await cache.set(cacheKey, result);
-            return result;
-          }
-        }
+      // Try Gemini first (fast & cheap)
+      if (this.useGemini) {
+        aiResult = await this.classifyWithGemini(prompt);
+      }
 
-        if (this.useAnthropic) {
-          const result = await this.classifyWithAnthropic(prompt);
-          if (result) {
-            await cache.set(cacheKey, result);
-            return result;
-          }
-        }
-      } catch (error) {
-        console.error('AI classification failed:', error.message);
+      // Fallback to OpenAI
+      if (!aiResult && this.useOpenAI) {
+        aiResult = await this.classifyWithOpenAI(prompt);
+      }
+
+      // Fallback to Anthropic
+      if (!aiResult && this.useAnthropic) {
+        aiResult = await this.classifyWithAnthropic(prompt);
+      }
+
+      if (aiResult) {
+        await cache.set(cacheKey, aiResult);
+        return aiResult;
       }
     }
 

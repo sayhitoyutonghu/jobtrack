@@ -247,15 +247,20 @@ router.post('/scan', async (req, res) => {
           continue;
         }
 
-        // 70/30 policy: prefer keyword rules; only use AI on complex emails ~30% of the time
+        // AI Policy: Use AI for all complex emails to ensure maximum accuracy
+        // especially for users with many job emails
         const bodyLen = (email.body || '').length;
-        const isComplex = bodyLen > 2000 || !email.subject || email.subject.length < 5;
-        const allowAIForThisEmail = isComplex && Math.random() < 0.3;
+        const isComplex = bodyLen > 500 || !email.subject || email.subject.length < 10;
+
+        // Always allow AI if it looks somewhat like a job email but missed keyword rules
+        // or if it's complex enough to warrant analysis
+        const allowAIForThisEmail = true; // Enabled 100% for better accuracy
 
         const classifier = new ClassifierService({
           enableAI: allowAIForThisEmail,
           openaiApiKey: process.env.OPENAI_API_KEY,
-          anthropicApiKey: process.env.ANTHROPIC_API_KEY
+          anthropicApiKey: process.env.ANTHROPIC_API_KEY,
+          geminiApiKey: process.env.GEMINI_API_KEY
         });
 
         const classification = await classifier.classify(email);
