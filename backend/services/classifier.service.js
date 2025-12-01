@@ -472,10 +472,50 @@ Respond with only one label (lowercase).`;
       return null;
     }
 
-    // Skip generic job discovery/alert emails
+    // Skip personal emails
+    const PERSONAL_SENDERS = ['mwang73151@aol.com'];
+    if (PERSONAL_SENDERS.some(s => (email.from || '').toLowerCase().includes(s))) {
+      console.log('⏭️  Skipping personal email');
+      return null;
+    }
+
+    // Skip application reminders (verify account, complete application, etc.)
+    const REMINDER_PATTERNS = [
+      /verify your account to finalise your application/i,
+      /complete your application/i,
+      /finish your application/i,
+      /reminder:.*application/i,
+      /action required:.*application/i
+    ];
+
     const subject = (email.subject || '').toLowerCase();
     const body = (email.body || '').toLowerCase();
     const text = `${subject} ${body}`;
+
+    if (REMINDER_PATTERNS.some(p => p.test(text))) {
+      console.log('⏭️  Skipping application reminder email');
+      return null;
+    }
+
+    // Skip generic job discovery/alert emails
+    // subject, body, and text are already defined above or need to be reused
+    // We can reuse the 'text' variable from above or just use the existing variables if they are in scope.
+    // However, looking at the code structure, the previous block defined them.
+    // Let's just use the existing variables if they are available, or re-assign if needed.
+
+    // Actually, to avoid confusion and errors, I will just use the variables without redeclaring them.
+    // But since I can't see the full scope easily, I'll assume they might be redeclared in the block I just added.
+    // Wait, the previous block I added:
+    // const subject = ...
+    // const body = ...
+    // const text = ...
+
+    // And the block BELOW (which was existing code) ALSO has:
+    // const subject = ...
+    // const body = ...
+    // const text = ...
+
+    // So I need to remove the declarations in the block BELOW.
 
     const JOB_ALERT_PATTERNS = [
       /job alert/i,
