@@ -196,13 +196,13 @@ router.post('/scan', async (req, res) => {
         // Skip if we've processed this message recently
         const seen = await seenCache.get(message.id);
         if (seen) {
-          results.push({ id: message.id, skipped: 'cached-seen' });
+          results.push({ id: message.id, subject: email?.subject, from: email?.from, date: email?.date, skipped: 'cached-seen' });
           console.log(`↪️  [scan] skipped ${message.id} (cached-seen)`);
           continue;
         }
 
         if (!email.body || email.body.length === 0) {
-          results.push({ id: email.id, subject: email.subject, skipped: 'empty-body' });
+          results.push({ id: email.id, subject: email.subject, from: email.from, date: email.date, skipped: 'empty-body' });
           console.log(`↪️  [scan] skipped ${email.id} (empty-body)`);
           continue;
         }
@@ -223,6 +223,8 @@ router.post('/scan', async (req, res) => {
           results.push({
             id: email.id,
             subject: email.subject,
+            from: email.from,
+            date: email.date,
             label: customResult.label,
             confidence: customResult.confidence,
             method: customResult.method,
@@ -239,7 +241,7 @@ router.post('/scan', async (req, res) => {
           const reason = clfNoAI.isFinanceReceipt && clfNoAI.isFinanceReceipt(email)
             ? 'ignored-finance-receipt'
             : 'not-job-related';
-          results.push({ id: email.id, subject: email.subject, skipped: reason });
+          results.push({ id: email.id, subject: email.subject, from: email.from, date: email.date, skipped: reason });
           console.log(`↪️  [scan] skipped ${email.id} (${reason})`);
           await seenCache.set(message.id, { skipped: reason, at: Date.now() });
           continue;
@@ -258,7 +260,7 @@ router.post('/scan', async (req, res) => {
 
         const classification = await classifier.classify(email);
         if (!classification) {
-          results.push({ id: email.id, subject: email.subject, skipped: 'no-match' });
+          results.push({ id: email.id, subject: email.subject, from: email.from, date: email.date, skipped: 'no-match' });
           console.log(`↪️  [scan] skipped ${email.id} (no-match)`);
           await seenCache.set(message.id, { skipped: 'no-match', at: Date.now() }, 6 * 60 * 60 * 1000);
           continue;
