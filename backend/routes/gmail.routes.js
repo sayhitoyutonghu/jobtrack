@@ -243,10 +243,11 @@ router.post('/scan', async (req, res) => {
             : 'not-job-related';
 
           // Log to file for debugging
-          const fs = require('fs');
-          const logMsg = `[${new Date().toISOString()}] SKIPPED: "${email.subject}" From: "${email.from}" Reason: ${reason}\n`;
-          fs.appendFileSync('scan.log', logMsg);
-
+          try {
+            const fs = require('fs');
+            const logMsg = `[${new Date().toISOString()}] SKIPPED_FILTER: "${email.subject}" From: "${email.from}" Reason: ${reason}\n`;
+            fs.appendFileSync('/tmp/scan.log', logMsg);
+          } catch (e) { }
           results.push({ id: email.id, subject: email.subject, from: email.from, date: email.date, skipped: reason });
           console.log(`↪️  [scan] skipped ${email.id} (${reason})`);
           await seenCache.set(message.id, { skipped: reason, at: Date.now() });
@@ -271,10 +272,10 @@ router.post('/scan', async (req, res) => {
 
         const classification = await classifier.classify(email);
         if (!classification) {
-          // Log no-match
+          // Log seen skip
           try {
             const fs = require('fs');
-            fs.appendFileSync('scan.log', `[${new Date().toISOString()}] SKIPPED_NOMATCH: "${email.subject}" (AI/Rules returned null)\n`);
+            fs.appendFileSync('/tmp/scan.log', `[${new Date().toISOString()}] SKIPPED_SEEN: ${message.id}\n`);
           } catch (e) { }
 
           results.push({ id: email.id, subject: email.subject, from: email.from, date: email.date, skipped: 'no-match' });

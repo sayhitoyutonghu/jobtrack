@@ -370,6 +370,8 @@ Respond with only one label (lowercase).`;
     const isFromUser = from.includes('@gmail.com') ||
       email.threadLabels?.includes('SENT');
 
+    console.log(`[DEBUG] isOutbound? from="${from}" isFromUser=${isFromUser} subject="${subject}"`);
+
     if (!isFromUser) return false;
 
     const APPLICATION_KEYWORDS = [
@@ -377,7 +379,9 @@ Respond with only one label (lowercase).`;
       'cover letter', 'position', 'job opening', 'opportunity', 'role'
     ];
 
-    return APPLICATION_KEYWORDS.some(keyword => text.includes(keyword));
+    const match = APPLICATION_KEYWORDS.find(keyword => text.includes(keyword));
+    console.log(`[DEBUG] isOutbound keyword match: ${match}`);
+    return !!match;
   }
 
   /**
