@@ -241,6 +241,12 @@ router.post('/scan', async (req, res) => {
           const reason = clfNoAI.isFinanceReceipt && clfNoAI.isFinanceReceipt(email)
             ? 'ignored-finance-receipt'
             : 'not-job-related';
+
+          // Log to file for debugging
+          const fs = require('fs');
+          const logMsg = `[${new Date().toISOString()}] SKIPPED: "${email.subject}" From: "${email.from}" Reason: ${reason}\n`;
+          fs.appendFileSync('scan.log', logMsg);
+
           results.push({ id: email.id, subject: email.subject, from: email.from, date: email.date, skipped: reason });
           console.log(`↪️  [scan] skipped ${email.id} (${reason})`);
           await seenCache.set(message.id, { skipped: reason, at: Date.now() });
