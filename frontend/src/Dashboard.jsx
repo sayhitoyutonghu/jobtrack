@@ -85,11 +85,13 @@ const Dashboard = ({ labels, loading, onRefresh, onToggleUpdate }) => {
 
   const saveLabel = async () => {
     try {
-      // Note: This URL should ideally come from an environment variable or API client
-      const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:3000'}/api/labels/${editingLabel}`, {
+      // Use the configured API URL or fallback to relative path
+      const apiUrl = import.meta.env.VITE_API_URL || '';
+      const response = await fetch(`${apiUrl}/api/labels/${editingLabel}`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
+          'x-session-id': localStorage.getItem('session_id')
         },
         body: JSON.stringify({
           ...editForm,
@@ -110,7 +112,6 @@ const Dashboard = ({ labels, loading, onRefresh, onToggleUpdate }) => {
       console.error('Error saving label:', error);
     }
   };
-
 
   const deleteLabelFromGmail = async (labelId, labelName) => {
     const confirmMessage = `⚠️ DANGER: This will permanently delete the "${labelName}" label from Gmail!\n\nThis action:\n• Cannot be undone\n• Will remove the label from ALL messages\n• Will delete the label completely from Gmail\n\nAre you absolutely sure you want to continue?`;

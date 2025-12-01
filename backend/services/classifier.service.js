@@ -505,11 +505,14 @@ Respond with only one label (lowercase).`;
     const phraseRules = [
       // Application confirmations - expanded patterns
       { pattern: /(application (was )?received|thank you for applying|we received your application)/, category: 'application' },
-      { pattern: /(your application (to|for|as)|application to|application for)/, category: 'application' },  // NEW: matches "Your application to Creative Designer"
+      { pattern: /(your application (to|for|as)|application to|application for)/, category: 'application' },
       { pattern: /(application was viewed|viewed your application|application reviewed)/, category: 'application' },
-      { pattern: /(job alert|jobs for you|now hiring|hiring in )/, category: 'application' },
-      // Job discovery alerts
-      { pattern: /(we found \d+ jobs|we found jobs|found \d+ jobs|\bnew jobs? in\b|\bjobs? in\b|alert: .*\bjobs?\b)/, category: 'application' },
+      // Specific GitHub confirmation
+      { pattern: /thank you for including github in your job search/i, category: 'application' },
+      // Removed generic "job alert" patterns that were causing false positives
+      { pattern: /(now hiring|hiring in )/, category: 'application' },
+      // Job discovery alerts - kept only specific ones that might be relevant, removed generic "found jobs"
+      { pattern: /(\bnew jobs? in\b)/, category: 'application' },
       // Interview
       { pattern: /(interview|schedule d?an interview|availability for interview|invite(d)? you to interview)/, category: 'interview' },
       // Offer: require stronger patterns to avoid generic "special offer" matches
