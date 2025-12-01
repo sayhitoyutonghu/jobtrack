@@ -379,7 +379,18 @@ Respond with only one label (lowercase).`;
     ];
 
     const text = `${email.subject || ''} ${email.snippet || ''} ${email.from || ''} ${email.body || ''}`.toLowerCase();
-    return baseKeywords.some(k => text.includes(k));
+
+    // DEBUG logging
+    console.log('[DEBUG] isJobRelated check:');
+    console.log('  Subject:', email.subject);
+    console.log('  From:', email.from);
+    console.log('  Body length:', (email.body || '').length);
+    console.log('  Text preview:', text.substring(0, 300));
+
+    const result = baseKeywords.some(k => text.includes(k));
+    console.log('  Result:', result);
+
+    return result;
   }
 
   /**
@@ -451,15 +462,19 @@ Respond with only one label (lowercase).`;
     const looksGenericContent = /\b(how to|guide|newsletter|daily update|tips|blog)\b/.test(subject);
 
     const phraseRules = [
+      // Application confirmations - expanded patterns
       { pattern: /(application (was )?received|thank you for applying|we received your application)/, category: 'application' },
+      { pattern: /(your application (to|for|as)|application to|application for)/, category: 'application' },  // NEW: matches "Your application to Creative Designer"
       { pattern: /(application was viewed|viewed your application|application reviewed)/, category: 'application' },
       { pattern: /(job alert|jobs for you|now hiring|hiring in )/, category: 'application' },
       // Job discovery alerts
       { pattern: /(we found \d+ jobs|we found jobs|found \d+ jobs|\bnew jobs? in\b|\bjobs? in\b|alert: .*\bjobs?\b)/, category: 'application' },
+      // Interview
       { pattern: /(interview|schedule d?an interview|availability for interview|invite(d)? you to interview)/, category: 'interview' },
       // Offer: require stronger patterns to avoid generic "special offer" matches
       { pattern: /(job offer|offer letter|offer details|accept (the )?offer|start date|compensation|onboarding)/, category: 'offer' },
-      { pattern: /(reject|not move forward|no longer moving forward|decline your application)/, category: 'rejected' }
+      // Rejection - expanded patterns
+      { pattern: /(reject|not (be )?moving forward|no longer moving forward|decline your application|will not be moving forward|unfortunately.*not)/, category: 'rejected' }  // UPDATED: added "will not be moving forward"
     ];
 
     for (const rule of phraseRules) {
