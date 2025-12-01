@@ -144,4 +144,16 @@ export const gmailApi = {
   }
 };
 
+export const jobsApi = {
+  getAll: async () => {
+    const response = await apiClient.get('/api/jobs');
+    return response.data;
+  },
+
+  update: async (jobData) => {
+    const response = await apiClient.post('/api/jobs', jobData);
+    return response.data;
+  }
+};
+
 export default apiClient;

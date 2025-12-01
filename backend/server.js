@@ -198,6 +198,7 @@ const requireAuth = (req, res, next) => {
 // ============================================
 
 app.use('/api/gmail', requireAuth, require('./routes/gmail.routes'));
+app.use('/api/jobs', requireAuth, require('./routes/jobs.routes'));
 app.use('/api/labels', requireAuth, require('./routes/labels.routes')); // Auth required for Gmail integration
 
 // 自动管理器API端点

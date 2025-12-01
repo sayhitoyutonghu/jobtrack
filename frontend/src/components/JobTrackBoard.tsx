@@ -26,7 +26,7 @@ import { CSS } from "@dnd-kit/utilities";
 import { clsx, type ClassValue } from "clsx";
 import { twMerge } from "tailwind-merge";
 import { GripVertical } from "lucide-react";
-import { gmailApi, authApi } from "../api/client.js";
+import { gmailApi, authApi, jobsApi } from "../api/client.js";
 
 // --- Utility: 合并 Tailwind 类名 ---
 function cn(...inputs: ClassValue[]) {
@@ -262,8 +262,30 @@ const TrashBin = () => {
 /**
  * Job Details Modal - Inspired by Teal design
  */
-const JobDetailsModal = ({ job, onClose, onDelete }: { job: Job; onClose: () => void; onDelete: (jobId: string) => void }) => {
+const JobDetailsModal = ({ job, onClose, onDelete, onSave }: { job: Job; onClose: () => void; onDelete: (jobId: string) => void; onSave: (job: Job) => void }) => {
+    const [isEditing, setIsEditing] = useState(false);
+    const [editedJob, setEditedJob] = useState<Job>(job);
+
+    // Reset edited job when job prop changes
+    useEffect(() => {
+        setEditedJob(job);
+    }, [job]);
+
     if (!job) return null;
+
+    const handleSave = () => {
+        onSave(editedJob);
+        setIsEditing(false);
+    };
+
+    const handleCancel = () => {
+        setEditedJob(job);
+        setIsEditing(false);
+    };
+
+    const handleChange = (field: keyof Job, value: string) => {
+        setEditedJob(prev => ({ ...prev, [field]: value }));
+    };
 
     return (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm" onClick={onClose}>
@@ -271,13 +293,39 @@ const JobDetailsModal = ({ job, onClose, onDelete }: { job: Job; onClose: () => 
                 className="bg-white border-4 border-black shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] w-full max-w-3xl max-h-[90vh] overflow-y-auto p-6 md:p-8 relative"
                 onClick={(e) => e.stopPropagation()}
             >
-                <button
-                    onClick={onClose}
-                    className="absolute top-4 right-4 p-2 hover:bg-black hover:text-white border-2 border-transparent hover:border-black transition-colors"
-                >
-                    <span className="sr-only">Close</span>
-                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
-                </button>
+                <div className="absolute top-4 right-4 flex gap-2">
+                    {isEditing ? (
+                        <>
+                            <button
+                                onClick={handleSave}
+                                className="p-2 bg-green-600 text-white hover:bg-green-700 border-2 border-black transition-colors font-bold text-xs uppercase"
+                            >
+                                Save
+                            </button>
+                            <button
+                                onClick={handleCancel}
+                                className="p-2 bg-red-600 text-white hover:bg-red-700 border-2 border-black transition-colors font-bold text-xs uppercase"
+                            >
+                                Cancel
+                            </button>
+                        </>
+                    ) : (
+                        <button
+                            onClick={() => setIsEditing(true)}
+                            className="p-2 hover:bg-black hover:text-white border-2 border-transparent hover:border-black transition-colors"
+                        >
+                            <span className="sr-only">Edit</span>
+                            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>
+                        </button>
+                    )}
+                    <button
+                        onClick={onClose}
+                        className="p-2 hover:bg-black hover:text-white border-2 border-transparent hover:border-black transition-colors"
+                    >
+                        <span className="sr-only">Close</span>
+                        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                    </button>
+                </div>
 
                 {/* Header Section */}
                 <div className="mb-8">
@@ -288,22 +336,60 @@ const JobDetailsModal = ({ job, onClose, onDelete }: { job: Job; onClose: () => 
                             day: 'numeric'
                         }) : 'Date Unknown'}
                     </div>
-                    <h2 className="text-4xl md:text-5xl font-black uppercase tracking-tighter mb-2">{job.company}</h2>
+                    {isEditing ? (
+                        <input
+                            type="text"
+                            value={editedJob.company}
+                            onChange={(e) => handleChange('company', e.target.value)}
+                            className="w-full text-4xl md:text-5xl font-black uppercase tracking-tighter mb-2 border-b-4 border-black focus:outline-none focus:border-blue-600 bg-transparent"
+                            placeholder="COMPANY NAME"
+                        />
+                    ) : (
+                        <h2 className="text-4xl md:text-5xl font-black uppercase tracking-tighter mb-2">{job.company}</h2>
+                    )}
                 </div>
 
                 {/* Three-column grid: Position, Company, Location */}
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
                     <div className="bg-blue-50 p-4 border-2 border-black">
                         <span className="block text-xs font-bold text-blue-600 uppercase mb-2">Job Position</span>
-                        <span className="text-lg font-bold text-black">{job.role}</span>
+                        {isEditing ? (
+                            <input
+                                type="text"
+                                value={editedJob.role}
+                                onChange={(e) => handleChange('role', e.target.value)}
+                                className="w-full text-lg font-bold text-black border-b-2 border-black bg-transparent focus:outline-none focus:border-blue-600"
+                            />
+                        ) : (
+                            <span className="text-lg font-bold text-black">{job.role}</span>
+                        )}
                     </div>
                     <div className="bg-green-50 p-4 border-2 border-black">
                         <span className="block text-xs font-bold text-green-600 uppercase mb-2">Company</span>
-                        <span className="text-lg font-bold text-black">{job.company}</span>
+                        {isEditing ? (
+                            <input
+                                type="text"
+                                value={editedJob.company}
+                                onChange={(e) => handleChange('company', e.target.value)}
+                                className="w-full text-lg font-bold text-black border-b-2 border-black bg-transparent focus:outline-none focus:border-green-600"
+                            />
+                        ) : (
+                            <span className="text-lg font-bold text-black">{job.company}</span>
+                        )}
                     </div>
                     <div className="bg-purple-50 p-4 border-2 border-black">
                         <span className="block text-xs font-bold text-purple-600 uppercase mb-2">Location</span>
-                        <span className="text-lg font-bold text-black">{job.location || "Unknown"}</span>
+                        {isEditing ? (
+                            <input
+                                type="text"
+                                value={editedJob.location || ''}
+                                onChange={(e) => handleChange('location', e.target.value)}
+                                className="w-full text-lg font-bold text-black border-b-2 border-black bg-transparent focus:outline-none focus:border-purple-600"
+                                placeholder="Unknown"
+                            />
+                        ) : (
+                            <span className="text-lg font-bold text-black">{job.location || "Unknown"}</span>
+                        )}
                     </div>
                 </div>
 
@@ -311,19 +397,41 @@ const JobDetailsModal = ({ job, onClose, onDelete }: { job: Job; onClose: () => 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
                     <div className="bg-zinc-50 p-4 border-2 border-black">
                         <span className="block text-xs font-bold text-zinc-400 uppercase mb-2">Status</span>
-                        <span className={cn(
-                            "inline-block px-3 py-1.5 text-sm font-bold border-2 border-black",
-                            job.status === 'Applied' && "bg-blue-100 text-blue-800",
-                            job.status === 'Interviewing' && "bg-orange-100 text-orange-800",
-                            job.status === 'Offer' && "bg-green-100 text-green-800",
-                            job.status === 'Rejected' && "bg-red-100 text-red-800",
-                        )}>
-                            {job.status.toUpperCase()}
-                        </span>
+                        {isEditing ? (
+                            <select
+                                value={editedJob.status}
+                                onChange={(e) => handleChange('status', e.target.value as Status)}
+                                className="w-full p-2 text-sm font-bold border-2 border-black bg-white focus:outline-none"
+                            >
+                                <option value="Applied">APPLIED</option>
+                                <option value="Interviewing">INTERVIEWING</option>
+                                <option value="Offer">OFFER</option>
+                                <option value="Rejected">REJECTED</option>
+                            </select>
+                        ) : (
+                            <span className={cn(
+                                "inline-block px-3 py-1.5 text-sm font-bold border-2 border-black",
+                                job.status === 'Applied' && "bg-blue-100 text-blue-800",
+                                job.status === 'Interviewing' && "bg-orange-100 text-orange-800",
+                                job.status === 'Offer' && "bg-green-100 text-green-800",
+                                job.status === 'Rejected' && "bg-red-100 text-red-800",
+                            )}>
+                                {job.status.toUpperCase()}
+                            </span>
+                        )}
                     </div>
                     <div className="bg-zinc-50 p-4 border-2 border-black">
                         <span className="block text-xs font-bold text-zinc-400 uppercase mb-2">Salary</span>
-                        <span className="text-lg font-bold">{job.salary}</span>
+                        {isEditing ? (
+                            <input
+                                type="text"
+                                value={editedJob.salary}
+                                onChange={(e) => handleChange('salary', e.target.value)}
+                                className="w-full text-lg font-bold border-b-2 border-black bg-transparent focus:outline-none"
+                            />
+                        ) : (
+                            <span className="text-lg font-bold">{job.salary}</span>
+                        )}
                     </div>
                 </div>
 
@@ -537,6 +645,7 @@ function mapLabelToStatus(label: string): Status {
 
 export default function JobTrackBoard() {
     const [jobs, setJobs] = useState<Job[]>([]);
+    const [savedJobs, setSavedJobs] = useState<Record<string, Job>>({});
     const [isLoading, setIsLoading] = useState(true);
     const [activeJob, setActiveJob] = useState<Job | null>(null);
     const [selectedJob, setSelectedJob] = useState<Job | null>(null);
@@ -567,6 +676,54 @@ export default function JobTrackBoard() {
         window.addEventListener('updateScanConfig', handleScanConfigUpdate);
         return () => window.removeEventListener('updateScanConfig', handleScanConfigUpdate);
     }, []);
+
+    // Fetch saved jobs on mount
+    useEffect(() => {
+        async function loadSavedJobs() {
+            try {
+                const data = await jobsApi.getAll();
+                if (data.success && data.jobs) {
+                    setSavedJobs(data.jobs);
+                }
+            } catch (error) {
+                console.error("Failed to load saved jobs:", error);
+            }
+        }
+        loadSavedJobs();
+    }, []);
+
+    const handleSaveJob = async (updatedJob: Job) => {
+        try {
+            // Optimistic update
+            setSavedJobs(prev => ({
+                ...prev,
+                [updatedJob.id]: updatedJob
+            }));
+
+            setJobs(prevJobs => prevJobs.map(job =>
+                job.id === updatedJob.id ? updatedJob : job
+            ));
+
+            if (selectedJob?.id === updatedJob.id) {
+                setSelectedJob(updatedJob);
+            }
+
+            // Persist to backend
+            await jobsApi.update(updatedJob);
+
+            setScanMessage("✓ Job updated successfully");
+            setTimeout(() => setScanMessage(null), 3000);
+        } catch (error) {
+            console.error("Failed to save job:", error);
+            setScanMessage("❌ Failed to save job");
+            setTimeout(() => setScanMessage(null), 3000);
+        }
+    };
+
+    const handleDeleteJob = (jobId: string) => {
+        setJobs(prevJobs => prevJobs.filter(j => j.id !== jobId));
+        setSelectedJob(null);
+    };
 
     const handleScan = async () => {
         setIsScanning(true);
@@ -634,7 +791,13 @@ export default function JobTrackBoard() {
                 setJobs(prevJobs => {
                     const existingIds = new Set(prevJobs.map(j => j.id));
                     const uniqueNewJobs = newJobs.filter((j: Job) => !existingIds.has(j.id));
-                    return [...prevJobs, ...uniqueNewJobs];
+
+                    // Merge with saved jobs
+                    const mergedJobs = [...prevJobs, ...uniqueNewJobs].map(job => {
+                        return savedJobs[job.id] ? { ...job, ...savedJobs[job.id] } : job;
+                    });
+
+                    return mergedJobs;
                 });
 
                 setLastScanTime(new Date());
@@ -724,7 +887,12 @@ export default function JobTrackBoard() {
                             emailSnippet: r.subject || "No subject"
                         }));
 
-                    setJobs(loadedJobs);
+                    // Merge with saved jobs
+                    const mergedJobs = loadedJobs.map((job: Job) => {
+                        return savedJobs[job.id] ? { ...job, ...savedJobs[job.id] } : job;
+                    });
+
+                    setJobs(mergedJobs);
                 } else {
                     setJobs([]);
                 }
@@ -737,7 +905,7 @@ export default function JobTrackBoard() {
         }
 
         fetchJobs();
-    }, []);
+    }, [savedJobs]); // Re-run when savedJobs changes to ensure initial load gets merged
 
     const columns = useMemo(() => {
         const cols = new Map<Status, Job[]>();
@@ -919,8 +1087,10 @@ export default function JobTrackBoard() {
                 <JobDetailsModal
                     job={selectedJob}
                     onClose={() => setSelectedJob(null)}
-                    onDelete={(jobId) => setJobs(prevJobs => prevJobs.filter(j => j.id !== jobId))}
-                />)}
+                    onDelete={handleDeleteJob}
+                    onSave={handleSaveJob}
+                />
+            )}
 
             {/* Toast Notification */}
             {scanMessage && (
