@@ -271,6 +271,12 @@ router.post('/scan', async (req, res) => {
 
         const classification = await classifier.classify(email);
         if (!classification) {
+          // Log no-match
+          try {
+            const fs = require('fs');
+            fs.appendFileSync('scan.log', `[${new Date().toISOString()}] SKIPPED_NOMATCH: "${email.subject}" (AI/Rules returned null)\n`);
+          } catch (e) { }
+
           results.push({ id: email.id, subject: email.subject, from: email.from, date: email.date, skipped: 'no-match' });
           console.log(`↪️  [scan] skipped ${email.id} (no-match)`);
           await seenCache.set(message.id, { skipped: 'no-match', at: Date.now() }, 6 * 60 * 60 * 1000);
