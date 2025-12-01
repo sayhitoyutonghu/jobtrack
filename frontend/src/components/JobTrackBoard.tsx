@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useMemo, useEffect } from "react";
+import React, { useState, useMemo, useEffect, useRef } from "react";
 import {
     DndContext,
     DragOverlay,
@@ -692,6 +692,21 @@ export default function JobTrackBoard() {
         loadSavedJobs();
     }, []);
 
+    // Keep a ref of savedJobs for access inside fetchJobs without dependency
+    const savedJobsRef = useRef(savedJobs);
+    useEffect(() => {
+        savedJobsRef.current = savedJobs;
+    }, [savedJobs]);
+
+    // Update jobs when savedJobs changes (to apply overrides to already loaded jobs)
+    useEffect(() => {
+        if (Object.keys(savedJobs).length === 0) return;
+
+        setJobs(prevJobs => prevJobs.map(job =>
+            savedJobs[job.id] ? { ...job, ...savedJobs[job.id] } : job
+        ));
+    }, [savedJobs]);
+
     const handleSaveJob = async (updatedJob: Job) => {
         try {
             // Optimistic update
@@ -792,9 +807,10 @@ export default function JobTrackBoard() {
                     const existingIds = new Set(prevJobs.map(j => j.id));
                     const uniqueNewJobs = newJobs.filter((j: Job) => !existingIds.has(j.id));
 
-                    // Merge with saved jobs
+                    // Merge with saved jobs using ref to avoid dependency
+                    const currentSavedJobs = savedJobsRef.current;
                     const mergedJobs = [...prevJobs, ...uniqueNewJobs].map(job => {
-                        return savedJobs[job.id] ? { ...job, ...savedJobs[job.id] } : job;
+                        return currentSavedJobs[job.id] ? { ...job, ...currentSavedJobs[job.id] } : job;
                     });
 
                     return mergedJobs;
@@ -887,9 +903,10 @@ export default function JobTrackBoard() {
                             emailSnippet: r.subject || "No subject"
                         }));
 
-                    // Merge with saved jobs
+                    // Merge with saved jobs using ref
+                    const currentSavedJobs = savedJobsRef.current;
                     const mergedJobs = loadedJobs.map((job: Job) => {
-                        return savedJobs[job.id] ? { ...job, ...savedJobs[job.id] } : job;
+                        return currentSavedJobs[job.id] ? { ...job, ...currentSavedJobs[job.id] } : job;
                     });
 
                     setJobs(mergedJobs);
@@ -905,7 +922,7 @@ export default function JobTrackBoard() {
         }
 
         fetchJobs();
-    }, [savedJobs]); // Re-run when savedJobs changes to ensure initial load gets merged
+    }, []); // Empty dependency array to run only once on mount
 
     const columns = useMemo(() => {
         const cols = new Map<Status, Job[]>();
