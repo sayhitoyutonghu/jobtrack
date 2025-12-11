@@ -180,38 +180,41 @@ function EmptyStatePlaceholder({ columnId }: { columnId: string }) {
     const instructions: Record<string, { step: string; title: string; desc: string; icon: string }> = {
         'Applied': {
             step: '01',
-            title: 'INITIALIZE',
-            desc: 'Click the [SCAN GMAIL] button top-right to auto-import jobs.',
-            icon: '📥'
+            title: 'INGESTION',
+            desc: 'SYSTEM OFFLINE. CLICK [SCAN_GMAIL] TO INGEST DATA.',
+            icon: '📡'
         },
         'Interviewing': {
             step: '02',
-            title: 'INTERACTION',
-            desc: 'Drag & Drop cards here to update status manually.',
-            icon: '🖱️'
+            title: 'PROCESSING',
+            desc: 'DRAG_AND_DROP OBJECTS HERE TO UPDATE STATUS.',
+            icon: '🕹️'
         },
         'Offer': {
             step: '03',
-            title: 'THE_GOAL',
-            desc: 'Visualize your wins here. Compare compensation packages.',
-            icon: '🏆'
+            title: 'SUCCESS',
+            desc: 'STORE POSITIVE OUTCOMES HERE.',
+            icon: '💾'
         },
         'Rejected': {
             step: '04',
             title: 'ARCHIVE',
-            desc: 'Keep a record. Every "No" brings you closer to a "Yes".',
-            icon: '🗄️'
+            desc: 'NON-CRITICAL DATA. RETAIN FOR LEARNING.',
+            icon: '🗑️'
         }
     };
 
     const info = instructions[columnId] || { step: '??', title: 'UNKNOWN', desc: 'Waiting for data...', icon: '❓' };
 
     return (
-        <div className="border-2 border-dashed border-gray-300 bg-gray-50/50 p-4 h-48 flex flex-col justify-between group select-none transition-colors hover:border-gray-400 hover:bg-gray-100">
+        <div className={cn(
+            "border-2 border-dashed border-zinc-300 bg-zinc-100/50 p-4 h-48 flex flex-col justify-between group select-none transition-colors hover:border-zinc-400 hover:bg-zinc-100",
+            columnId === 'Applied' && "border-zinc-400 bg-zinc-100" // Applied 列稍微显眼一点
+        )}>
 
             {/* 顶部：步骤编号 */}
             <div className="flex justify-between items-start opacity-50">
-                <span className="font-mono text-xs font-bold text-gray-500">
+                <span className="font-mono text-xs font-bold text-zinc-500">
           // STEP_{info.step}
                 </span>
                 <span className="text-xl grayscale opacity-50">{info.icon}</span>
@@ -219,18 +222,18 @@ function EmptyStatePlaceholder({ columnId }: { columnId: string }) {
 
             {/* 中间：核心指令 */}
             <div className="mt-2">
-                <h3 className="font-mono font-bold text-sm text-gray-700 mb-1">
+                <h3 className="font-mono font-bold text-sm text-zinc-700 mb-1">
                     {`> ${info.title}`}
                 </h3>
-                <p className="font-mono text-xs text-gray-500 leading-relaxed">
+                <p className="font-mono text-xs text-zinc-500 leading-relaxed uppercase">
                     {info.desc}
                 </p>
             </div>
 
             {/* 底部：装饰性光标 */}
             <div className="mt-2 flex items-center gap-1">
-                <div className="w-2 h-4 bg-gray-300 animate-pulse"></div>
-                <span className="font-mono text-[10px] text-gray-400">WAITING_FOR_INPUT</span>
+                <div className="w-2 h-4 bg-zinc-400 animate-pulse"></div>
+                <span className="font-mono text-[10px] text-zinc-400">WAITING_FOR_INPUT</span>
             </div>
 
         </div>
