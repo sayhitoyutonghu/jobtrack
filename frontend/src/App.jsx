@@ -176,6 +176,14 @@ const JobEmailCategorizationApp = () => {
               Sign in with Google
             </button>
           )}
+          {!authStatus.authenticated && (
+            <div className="mt-4 px-1">
+              <p className="text-xs text-zinc-400 text-center leading-relaxed">
+                Currently in Private Beta. <br />
+                Sign in restricted to approved testers.
+              </p>
+            </div>
+          )}
         </div>
       </aside>
 
