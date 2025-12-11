@@ -150,8 +150,13 @@ export const jobsApi = {
     return response.data;
   },
 
-  update: async (jobData) => {
-    const response = await apiClient.post('/api/jobs', jobData);
+  update: async (jobId, updates) => {
+    const response = await apiClient.patch(`/api/jobs/${jobId}`, updates);
+    return response.data;
+  },
+
+  delete: async (jobId) => {
+    const response = await apiClient.delete(`/api/jobs/${jobId}`);
     return response.data;
   }
 };

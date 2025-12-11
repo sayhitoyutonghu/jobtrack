@@ -172,27 +172,35 @@ class GmailService {
     for (const labelConfig of JOB_LABELS) {
       try {
         const label = await this.createLabel(labelConfig);
-        results.push({ 
-          success: true, 
+        results.push({
+          success: true,
           name: labelConfig.name,
           icon: labelConfig.icon
         });
-        
+
         // Rate limiting
         await this.sleep(200);
       } catch (error) {
-        results.push({ 
-          success: false, 
+        results.push({
+          success: false,
           name: labelConfig.name,
-          error: error.message 
+          error: error.message
         });
       }
     }
 
     const successful = results.filter(r => r.success).length;
     console.log(`✅ Set up ${successful}/${JOB_LABELS.length} labels`);
-    
+
     return results;
+  }
+
+  /**
+   * Get the user's email address
+   */
+  async getUserEmail() {
+    const response = await this.gmail.users.getProfile({ userId: 'me' });
+    return response.data.emailAddress;
   }
 
   /**
@@ -200,7 +208,7 @@ class GmailService {
    */
   async createCustomLabel(labelData) {
     const { name, description, color, icon } = labelData;
-    
+
     const labelConfig = {
       name,
       description: description || '',
@@ -208,7 +216,7 @@ class GmailService {
       icon: icon || '📋',
       moveToFolder: false
     };
-    
+
     return await this.createLabel(labelConfig);
   }
 
@@ -353,12 +361,12 @@ class GmailService {
   async removeLabelFromAllMessages(labelName, maxResults = 100) {
     const label = await this.findLabel(labelName);
     if (!label) return { success: false, reason: 'label-not-found' };
-    
+
     try {
       // 获取所有带有该label的消息
       const messages = await this.listMessagesByLabelId(label.id, maxResults);
       let removedCount = 0;
-      
+
       for (const message of messages) {
         try {
           // 获取消息详情以获取threadId
@@ -374,12 +382,12 @@ class GmailService {
           console.warn(`Failed to remove label from message ${message.id}:`, error.message);
         }
       }
-      
-      return { 
-        success: true, 
-        removed: labelName, 
+
+      return {
+        success: true,
+        removed: labelName,
         count: removedCount,
-        total: messages.length 
+        total: messages.length
       };
     } catch (error) {
       console.error(`Error removing label ${labelName}:`, error);
@@ -397,24 +405,24 @@ class GmailService {
         userId: 'me',
         id: labelId
       });
-      
+
       const labelName = label.data.name;
-      
+
       // 检查是否是系统标签（不能删除）
       const systemLabels = ['INBOX', 'SENT', 'DRAFT', 'SPAM', 'TRASH', 'STARRED', 'IMPORTANT', 'UNREAD'];
       if (systemLabels.includes(labelName)) {
         return { success: false, reason: 'system-label', message: 'Cannot delete system labels' };
       }
-      
+
       // 删除标签
       await this.gmail.users.labels.delete({
         userId: 'me',
         id: labelId
       });
-      
+
       console.log(`✅ Successfully deleted label by ID: ${labelName} (${labelId})`);
-      return { 
-        success: true, 
+      return {
+        success: true,
         deleted: labelName,
         labelId: labelId
       };
@@ -430,23 +438,23 @@ class GmailService {
   async deleteLabel(labelName) {
     const label = await this.findLabel(labelName);
     if (!label) return { success: false, reason: 'label-not-found' };
-    
+
     try {
       // 检查是否是系统标签（不能删除）
       const systemLabels = ['INBOX', 'SENT', 'DRAFT', 'SPAM', 'TRASH', 'STARRED', 'IMPORTANT', 'UNREAD'];
       if (systemLabels.includes(label.name)) {
         return { success: false, reason: 'system-label', message: 'Cannot delete system labels' };
       }
-      
+
       // 删除标签
       await this.gmail.users.labels.delete({
         userId: 'me',
         id: label.id
       });
-      
+
       console.log(`✅ Successfully deleted label: ${labelName}`);
-      return { 
-        success: true, 
+      return {
+        success: true,
         deleted: labelName,
         labelId: label.id
       };
@@ -577,6 +585,19 @@ class GmailService {
    */
   sleep(ms) {
     return new Promise(resolve => setTimeout(resolve, ms));
+  }
+
+  /**
+   * Get authenticated user's email address
+   */
+  async getUserEmail() {
+    try {
+      const profile = await this.gmail.users.getProfile({ userId: 'me' });
+      return profile.data.emailAddress;
+    } catch (error) {
+      console.error('Error fetching user profile:', error.message);
+      return 'unknown';
+    }
   }
 }
 

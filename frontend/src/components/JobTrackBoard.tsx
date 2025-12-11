@@ -172,6 +172,72 @@ const JobCard = ({ job, isOverlay, onClick }: JobCardProps) => {
 };
 
 /**
+ * 新增：说明书风格的幽灵卡片
+ */
+function EmptyStatePlaceholder({ columnId }: { columnId: string }) {
+
+    // 定义每一列的专属“任务说明书”
+    const instructions: Record<string, { step: string; title: string; desc: string; icon: string }> = {
+        'Applied': {
+            step: '01',
+            title: 'INITIALIZE',
+            desc: 'Click the [SCAN GMAIL] button top-right to auto-import jobs.',
+            icon: '📥'
+        },
+        'Interviewing': {
+            step: '02',
+            title: 'INTERACTION',
+            desc: 'Drag & Drop cards here to update status manually.',
+            icon: '🖱️'
+        },
+        'Offer': {
+            step: '03',
+            title: 'THE_GOAL',
+            desc: 'Visualize your wins here. Compare compensation packages.',
+            icon: '🏆'
+        },
+        'Rejected': {
+            step: '04',
+            title: 'ARCHIVE',
+            desc: 'Keep a record. Every "No" brings you closer to a "Yes".',
+            icon: '🗄️'
+        }
+    };
+
+    const info = instructions[columnId] || { step: '??', title: 'UNKNOWN', desc: 'Waiting for data...', icon: '❓' };
+
+    return (
+        <div className="border-2 border-dashed border-gray-300 bg-gray-50/50 p-4 h-48 flex flex-col justify-between group select-none transition-colors hover:border-gray-400 hover:bg-gray-100">
+
+            {/* 顶部：步骤编号 */}
+            <div className="flex justify-between items-start opacity-50">
+                <span className="font-mono text-xs font-bold text-gray-500">
+          // STEP_{info.step}
+                </span>
+                <span className="text-xl grayscale opacity-50">{info.icon}</span>
+            </div>
+
+            {/* 中间：核心指令 */}
+            <div className="mt-2">
+                <h3 className="font-mono font-bold text-sm text-gray-700 mb-1">
+                    {`> ${info.title}`}
+                </h3>
+                <p className="font-mono text-xs text-gray-500 leading-relaxed">
+                    {info.desc}
+                </p>
+            </div>
+
+            {/* 底部：装饰性光标 */}
+            <div className="mt-2 flex items-center gap-1">
+                <div className="w-2 h-4 bg-gray-300 animate-pulse"></div>
+                <span className="font-mono text-[10px] text-gray-400">WAITING_FOR_INPUT</span>
+            </div>
+
+        </div>
+    );
+}
+
+/**
  * 列容器组件
  */
 interface ColumnProps {
@@ -218,9 +284,13 @@ const Column = ({ column, jobs, onJobClick }: ColumnProps) => {
                     strategy={verticalListSortingStrategy}
                 >
                     <div className="flex flex-col gap-1">
-                        {jobs.map((job) => (
-                            <JobCard key={job.id} job={job} onClick={onJobClick} />
-                        ))}
+                        {jobs.length === 0 ? (
+                            <EmptyStatePlaceholder columnId={column.id} />
+                        ) : (
+                            jobs.map((job) => (
+                                <JobCard key={job.id} job={job} onClick={onJobClick} />
+                            ))
+                        )}
                     </div>
                 </SortableContext>
             </div>
@@ -732,7 +802,8 @@ export default function JobTrackBoard() {
             }
 
             // Persist to backend
-            await jobsApi.update(updatedJob);
+            // Persist to backend
+            await jobsApi.update(updatedJob.id, updatedJob);
 
             setScanMessage("✓ Job updated successfully");
             setTimeout(() => setScanMessage(null), 3000);
@@ -743,9 +814,15 @@ export default function JobTrackBoard() {
         }
     };
 
-    const handleDeleteJob = (jobId: string) => {
-        setJobs(prevJobs => prevJobs.filter(j => j.id !== jobId));
-        setSelectedJob(null);
+    const handleDeleteJob = async (jobId: string) => {
+        try {
+            await jobsApi.delete(jobId);
+            setJobs(prevJobs => prevJobs.filter(j => j.id !== jobId));
+            setSelectedJob(null);
+        } catch (error) {
+            console.error("Failed to delete job:", error);
+            // Optionally show error toast
+        }
     };
 
     const handleScan = async () => {
@@ -833,6 +910,13 @@ export default function JobTrackBoard() {
                 setScanMessage("No new emails found");
                 setTimeout(() => setScanMessage(null), 3000);
             }
+
+            // Refresh jobs from DB to get latest state (including any newly scanned ones)
+            const dbJobs = await jobsApi.getAll();
+            if (dbJobs.success && dbJobs.jobs) {
+                setJobs(dbJobs.jobs);
+            }
+
         } catch (e: any) {
             console.error("Scan failed", e);
             scanError = e.message || "Network error";
@@ -890,34 +974,11 @@ export default function JobTrackBoard() {
                     return;
                 }
 
-                // Fetch recent labeled emails using gmailApi
-                const data = await gmailApi.scanEmails({
-                    maxResults: maxResults,
-                    query: "newer_than:7d" // Reduced from 30d to 7d for faster loading
-                });
+                // Fetch saved jobs from DB
+                const data = await jobsApi.getAll();
 
-                if (data.success && data.results) {
-                    const loadedJobs = data.results
-                        .filter((r: any) => !r.skipped && r.label)
-                        .map((r: any) => ({
-                            id: r.id,
-                            company: extractCompany(r.subject || "", r.from || ""),
-                            role: extractRole(r.subject || ""),
-                            salary: "Unknown",
-                            status: mapLabelToStatus(r.label),
-                            location: extractLocation(r.subject || "", ""),
-                            description: r.subject,
-                            date: new Date().toISOString().split('T')[0],
-                            emailSnippet: r.subject || "No subject"
-                        }));
-
-                    // Merge with saved jobs using ref
-                    const currentSavedJobs = savedJobsRef.current;
-                    const mergedJobs = loadedJobs.map((job: Job) => {
-                        return currentSavedJobs[job.id] ? { ...job, ...currentSavedJobs[job.id] } : job;
-                    });
-
-                    setJobs(mergedJobs);
+                if (data.success && data.jobs) {
+                    setJobs(data.jobs);
                 } else {
                     setJobs([]);
                 }
@@ -1052,6 +1113,7 @@ export default function JobTrackBoard() {
             }
 
             // 2. Persist to backend
+            // 2. Persist to backend
             jobsApi.update(job.id, { status: newStatus }).catch(err => {
                 console.error("Failed to persist drag and drop status change:", err);
                 // Optionally revert UI here if needed, but for now we trust optimistic update
@@ -1098,7 +1160,11 @@ export default function JobTrackBoard() {
                 <button
                     onClick={handleScan}
                     disabled={isScanning}
-                    className="bg-black text-white px-6 py-3 font-bold uppercase tracking-wider border-2 border-black hover:bg-white hover:text-black transition-all shadow-[4px_4px_0px_0px_rgba(0,0,0,0.3)] hover:shadow-[2px_2px_0px_0px_rgba(0,0,0,0.3)] hover:translate-y-0.5 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                    className={cn(
+                        "bg-black text-white px-6 py-3 font-bold uppercase tracking-wider border-2 border-black hover:bg-white hover:text-black transition-all shadow-[4px_4px_0px_0px_rgba(0,0,0,0.3)] hover:shadow-[2px_2px_0px_0px_rgba(0,0,0,0.3)] hover:translate-y-0.5 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2",
+                        // Add breathing animation if Applied column is empty
+                        (columns.get('Applied')?.length === 0 && !isScanning) && "animate-pulse"
+                    )}
                 >
                     {isScanning ? (
                         <>

@@ -20,6 +20,7 @@ require('dotenv').config();
 const { saveSession, getSession } = require('./services/session.store');
 const AutoManagerService = require('./services/auto-manager.service');
 const OpenAI = require('openai');
+const mongoose = require('mongoose');
 
 // Initialize Express application
 const app = express();
@@ -37,6 +38,29 @@ app.use(cors({
 
 // JSON body parser for API requests
 app.use(express.json());
+
+// ============================================
+// DATABASE CONNECTION
+// ============================================
+
+const connectDB = async () => {
+  try {
+    if (!process.env.MONGO_URI) {
+      console.warn('⚠️ MONGO_URI not found in environment variables. Persistence disabled.');
+      return;
+    }
+    await mongoose.connect(process.env.MONGO_URI);
+    console.log('🍃 MongoDB Connected');
+  } catch (err) {
+    console.error('❌ MongoDB Connection Error:', err.message);
+    // - [x] Install mongoose <!-- id: 7 -->
+    // - [x] Create Job model <!-- id: 8 -->
+    // - [/] Update server.js to connect to MongoDB <!-- id: 9 -->
+    // Don't exit process, allow server to run without DB (graceful degradation)
+  }
+};
+
+connectDB();
 
 // ============================================
 // SESSION MANAGEMENT
