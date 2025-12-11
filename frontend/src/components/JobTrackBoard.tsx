@@ -174,7 +174,7 @@ const JobCard = ({ job, isOverlay, onClick }: JobCardProps) => {
 /**
  * 新增：说明书风格的幽灵卡片
  */
-function EmptyStatePlaceholder({ columnId }: { columnId: string }) {
+function EmptyStatePlaceholder({ columnId, onClick }: { columnId: string, onClick?: () => void }) {
 
     // 定义每一列的专属“任务说明书”
     const instructions: Record<string, { step: string; title: string; desc: string; icon: string }> = {
@@ -207,10 +207,13 @@ function EmptyStatePlaceholder({ columnId }: { columnId: string }) {
     const info = instructions[columnId] || { step: '??', title: 'UNKNOWN', desc: 'Waiting for data...', icon: '❓' };
 
     return (
-        <div className={cn(
-            "border-2 border-dashed border-zinc-300 bg-zinc-100/50 p-4 h-48 flex flex-col justify-between group select-none transition-colors hover:border-zinc-400 hover:bg-zinc-100",
-            columnId === 'Applied' && "border-zinc-400 bg-zinc-100" // Applied 列稍微显眼一点
-        )}>
+        <div
+            onClick={columnId === 'Applied' ? onClick : undefined}
+            className={cn(
+                "border-2 border-dashed border-zinc-300 bg-zinc-100/50 p-4 h-48 flex flex-col justify-between group select-none transition-colors hover:border-zinc-400 hover:bg-zinc-100",
+                columnId === 'Applied' && "border-zinc-400 bg-zinc-100 cursor-pointer hover:border-blue-400 hover:bg-blue-50" // Applied 列稍微显眼一点
+            )}
+        >
 
             {/* 顶部：步骤编号 */}
             <div className="flex justify-between items-start opacity-50">
@@ -247,9 +250,10 @@ interface ColumnProps {
     column: { id: Status; title: string; color: string; borderColor: string };
     jobs: Job[];
     onJobClick: (job: Job) => void;
+    onPlaceholderClick?: () => void;
 }
 
-const Column = ({ column, jobs, onJobClick }: ColumnProps) => {
+const Column = ({ column, jobs, onJobClick, onPlaceholderClick }: ColumnProps) => {
     const { setNodeRef } = useSortable({
         id: column.id,
         data: {
@@ -288,7 +292,7 @@ const Column = ({ column, jobs, onJobClick }: ColumnProps) => {
                 >
                     <div className="flex flex-col gap-1">
                         {jobs.length === 0 ? (
-                            <EmptyStatePlaceholder columnId={column.id} />
+                            <EmptyStatePlaceholder columnId={column.id} onClick={onPlaceholderClick} />
                         ) : (
                             jobs.map((job) => (
                                 <JobCard key={job.id} job={job} onClick={onJobClick} />
@@ -745,6 +749,7 @@ export default function JobTrackBoard() {
         const saved = localStorage.getItem('scan_date_range');
         return saved || '7d';
     });
+    const [isDemoMode, setIsDemoMode] = useState(false);
 
     // Listen for scan config updates from ScanLogs
     useEffect(() => {
@@ -804,9 +809,10 @@ export default function JobTrackBoard() {
                 setSelectedJob(updatedJob);
             }
 
-            // Persist to backend
-            // Persist to backend
-            await jobsApi.update(updatedJob.id, updatedJob);
+            // Persist to backend if not in demo mode
+            if (!isDemoMode) {
+                await jobsApi.update(updatedJob.id, updatedJob);
+            }
 
             setScanMessage("✓ Job updated successfully");
             setTimeout(() => setScanMessage(null), 3000);
@@ -819,7 +825,9 @@ export default function JobTrackBoard() {
 
     const handleDeleteJob = async (jobId: string) => {
         try {
-            await jobsApi.delete(jobId);
+            if (!isDemoMode) {
+                await jobsApi.delete(jobId);
+            }
             setJobs(prevJobs => prevJobs.filter(j => j.id !== jobId));
             setSelectedJob(null);
         } catch (error) {
@@ -828,9 +836,25 @@ export default function JobTrackBoard() {
         }
     };
 
+    const handleDemoLoad = () => {
+        setIsDemoMode(true);
+        setJobs(FALLBACK_DATA);
+        setScanMessage("✨ Demo data loaded!");
+        setTimeout(() => setScanMessage(null), 3000);
+    };
+
     const handleScan = async () => {
         setIsScanning(true);
         setScanMessage(null);
+
+        // Check if authenticated
+        const sessionId = localStorage.getItem('session_id');
+        if (!sessionId) {
+            // If not authenticated, trigger demo mode
+            handleDemoLoad();
+            setIsScanning(false);
+            return;
+        }
 
         // Build query based on configuration
         const sourceQuery = scanSource === 'inbox' ? 'in:inbox' : 'is:unread';
@@ -1115,12 +1139,13 @@ export default function JobTrackBoard() {
                 };
             }
 
-            // 2. Persist to backend
-            // 2. Persist to backend
-            jobsApi.update(job.id, { status: newStatus }).catch(err => {
-                console.error("Failed to persist drag and drop status change:", err);
-                // Optionally revert UI here if needed, but for now we trust optimistic update
-            });
+            // 2. Persist to backend if not in demo mode
+            if (!isDemoMode) {
+                jobsApi.update(job.id, { status: newStatus }).catch(err => {
+                    console.error("Failed to persist drag and drop status change:", err);
+                    // Optionally revert UI here if needed, but for now we trust optimistic update
+                });
+            }
         }
     };
 
@@ -1198,6 +1223,7 @@ export default function JobTrackBoard() {
                                     column={col}
                                     jobs={columns.get(col.id) || []}
                                     onJobClick={setSelectedJob}
+                                    onPlaceholderClick={col.id === 'Applied' ? handleDemoLoad : undefined}
                                 />
                             </div>
                         ))}
