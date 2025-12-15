@@ -195,13 +195,13 @@ function EmptyStatePlaceholder({ columnId, onClick }: { columnId: string, onClic
         'Offer': {
             step: '03',
             title: 'SUCCESS',
-            desc: 'STORE POSITIVE OUTCOMES HERE.',
+            desc: 'CLICK JOB TO EDIT DETAILS.',
             icon: '💾'
         },
         'Rejected': {
             step: '04',
             title: 'ARCHIVE',
-            desc: 'NON-CRITICAL DATA. RETAIN FOR LEARNING.',
+            desc: "LIKE IT? CAN'T WAIT TO KNOW HOW MANY JOBS YOU APPLIED? CLICK SIGN IN AT THE LEFT BOTTOM CORNER.",
             icon: '🗑️'
         }
     };
