@@ -258,6 +258,31 @@ interface ColumnProps {
     isAuthenticated?: boolean;
 }
 
+// Authenticated Empty State Component
+function AuthenticatedEmptyState({ onClick }: { onClick?: () => void }) {
+    return (
+        <div
+            onClick={onClick}
+            className="border-2 border-dashed border-zinc-400 bg-zinc-100 p-6 h-64 flex flex-col justify-center items-center gap-4 text-center group cursor-pointer hover:bg-white transition-colors"
+        >
+            <div className="w-12 h-12 rounded-full bg-zinc-200 flex items-center justify-center border-2 border-black group-hover:scale-110 transition-transform">
+                <span className="text-2xl">👆</span>
+            </div>
+
+            <div className="space-y-2 max-w-xs">
+                <h3 className="font-bold text-lg">READY TO SCAN</h3>
+                <p className="font-mono text-xs text-zinc-500 leading-relaxed uppercase">
+                    CLICK <span className="bg-black text-white px-1">SCAN GMAIL</span> IN THE TOP RIGHT.
+                </p>
+                <p className="font-mono text-[10px] text-zinc-400 leading-relaxed uppercase border-t-2 border-zinc-200 pt-2 mt-2">
+                    NEED TO ADJUST SETTINGS?
+                    <br />CHECK <span className="text-black font-bold">SCAN LOGS</span> IN SIDEBAR.
+                </p>
+            </div>
+        </div>
+    );
+}
+
 const Column = ({ column, jobs, onJobClick, onPlaceholderClick, showWelcomeCard, onStartDemo, isAuthenticated }: ColumnProps) => {
     const { setNodeRef } = useSortable({
         id: column.id,
@@ -268,19 +293,21 @@ const Column = ({ column, jobs, onJobClick, onPlaceholderClick, showWelcomeCard,
     });
 
     return (
-        <div className="flex flex-col h-full w-full">
-            {/* Column Header - 模仿终端标题栏 */}
+        <div className="flex flex-col h-full min-h-0">
+            {/* Header */}
             <div className={cn(
-                "mb-4 border-2 border-black text-white p-3 shadow-[4px_4px_0px_0px_rgba(0,0,0,0.2)]",
+                "flex items-center justify-between p-2 mb-2 border-2 border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]",
                 column.color
             )}>
-                <h2 className="font-mono font-bold text-sm tracking-widest uppercase flex items-center gap-2">
-                    <span className="w-3 h-3 bg-white border border-black"></span>
-                    {column.title}
-                    <span className="ml-auto bg-white text-black px-1.5 text-xs border border-black">
-                        {jobs.length}
-                    </span>
-                </h2>
+                <div className="flex items-center gap-2">
+                    <span className="w-3 h-3 border-2 border-black bg-white"></span>
+                    <h2 className="font-black uppercase tracking-widest text-white text-sm md:text-base">
+                        {column.title}
+                    </h2>
+                </div>
+                <span className="font-mono font-bold text-xs bg-white text-black px-1.5 border border-black">
+                    {jobs.length}
+                </span>
             </div>
 
             {/* Droppable Area */}
@@ -296,13 +323,29 @@ const Column = ({ column, jobs, onJobClick, onPlaceholderClick, showWelcomeCard,
                     strategy={verticalListSortingStrategy}
                 >
                     <div className="flex flex-col gap-1">
+                        {/* 1. Guest: Welcome Card */}
                         {jobs.length === 0 && showWelcomeCard && column.id === 'Applied' && !isAuthenticated && (
                             <WelcomeCard onPlay={onStartDemo} />
                         )}
 
+                        {/* 2. Authenticated: Scan Prompt */}
+                        {jobs.length === 0 && column.id === 'Applied' && isAuthenticated && (
+                            <AuthenticatedEmptyState onClick={onPlaceholderClick} />
+                        )}
+
+                        {/* 3. Standard Placeholders (non-Applied columns or guest non-Applied) */}
                         {jobs.length === 0 && (!showWelcomeCard || column.id !== 'Applied') && !isAuthenticated && (
                             <EmptyStatePlaceholder columnId={column.id} onClick={onPlaceholderClick} />
                         )}
+
+                        {/* 4. Authenticated Empty for non-Applied? keep empty or standard? 
+                           User only mentioned dashboard changes. Let's keep other columns clean or standard instructions.
+                           Actually previous logic hid them for authenticated users. 
+                           The previous code: `(!showWelcomeCard || column.id !== 'Applied') && !isAuthenticated`
+                           This implies authenticated users see NOTHING in empty columns (except Applied which we just added).
+                           That seems correct per "dashboard should be blank or..."
+                           But let's stick to the plan.
+                        */}
 
                         {jobs.map((job) => (
                             <JobCard key={job.id} job={job} onClick={onJobClick} />
