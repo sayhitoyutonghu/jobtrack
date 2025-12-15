@@ -1,10 +1,6 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
+import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import {
-  Settings,
-  AlertCircle,
-  PlayCircle,
-  PauseCircle,
-  LoaderCircle,
   ShieldCheck,
   RefreshCcw,
   Inbox,
@@ -13,41 +9,18 @@ import {
 import Dashboard from './Dashboard.jsx';
 import JobTrackBoard from './components/JobTrackBoard';
 import ScanLogs from './components/ScanLogs';
+import PrivacyPolicy from './components/PrivacyPolicy';
 import { authApi, gmailApi } from './api/client.js';
 import './App.css';
 
-const JobEmailCategorizationApp = () => {
+const MainApp = () => {
   const [view, setView] = useState('board'); // 'board', 'labels', 'scanlogs'
   const [labels, setLabels] = useState([]);
   const [labelsLoading, setLabelsLoading] = useState(true);
   const [labelsError, setLabelsError] = useState(null);
 
-  const [scanResult, setScanResult] = useState(null);
-  const [scanLoading, setScanLoading] = useState(false);
-  const [scanError, setScanError] = useState(null);
-
-  const [autoScanStatus, setAutoScanStatus] = useState({ running: false });
-  const [autoScanLoading, setAutoScanLoading] = useState(false);
-  const [autoScanError, setAutoScanError] = useState(null);
-
   const [authStatus, setAuthStatus] = useState({ authenticated: false, sessionId: null });
   const [authLoading, setAuthLoading] = useState(false);
-
-  // Custom label creation state
-  const [showCreateLabelForm, setShowCreateLabelForm] = useState(false);
-  const [newLabel, setNewLabel] = useState({ name: '', description: '', color: '#4a86e8', icon: '📋' });
-  const [createLabelLoading, setCreateLabelLoading] = useState(false);
-  const [createLabelError, setCreateLabelError] = useState(null);
-
-  // AI analysis state
-  const [emailContent, setEmailContent] = useState('');
-  const [aiAnalysis, setAiAnalysis] = useState(null);
-  const [aiLoading, setAiLoading] = useState(false);
-  const [aiError, setAiError] = useState(null);
-
-  const [query, setQuery] = useState('is:unread');
-  const [queryOption, setQueryOption] = useState('is:unread');
-  const [maxResults, setMaxResults] = useState(25);
 
   useEffect(() => {
     // Check if we have a session parameter from OAuth callback
@@ -60,13 +33,11 @@ const JobEmailCategorizationApp = () => {
     }
 
     loadAuthStatus();
-    // loadAutoScanStatus(); // Commented out to prevent errors if backend doesn't support it yet
   }, []);
 
   const loadAuthStatus = async () => {
     try {
       setAuthLoading(true);
-      // Try to check status, if 404/error, assume not authenticated or handle gracefully
       try {
         const status = await authApi.checkStatus();
         setAuthStatus(status);
@@ -75,8 +46,6 @@ const JobEmailCategorizationApp = () => {
         }
       } catch (e) {
         console.warn("Auth check failed (backend might not support it yet):", e);
-        // For now, if we are in local dev with python, we might want to fake it or just show unauthenticated
-        // setAuthStatus({ authenticated: true, sessionId: 'dev-session' }); // Uncomment to force auth for testing
       }
     } catch (error) {
       console.error('Failed to check auth status:', error);
@@ -210,4 +179,15 @@ const JobEmailCategorizationApp = () => {
   );
 };
 
-export default JobEmailCategorizationApp;
+function App() {
+  return (
+    <Router>
+      <Routes>
+        <Route path="/" element={<MainApp />} />
+        <Route path="/privacy" element={<PrivacyPolicy />} />
+      </Routes>
+    </Router>
+  );
+}
+
+export default App;
