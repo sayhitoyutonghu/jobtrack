@@ -780,7 +780,12 @@ function mapLabelToStatus(label: string): Status {
     return "Applied";
 }
 
-export default function JobTrackBoard() {
+// Auth prop type
+interface JobTrackBoardProps {
+    isAuthenticated: boolean;
+}
+
+export default function JobTrackBoard({ isAuthenticated }: JobTrackBoardProps) {
     const [jobs, setJobs] = useState<Job[]>([]);
     const [savedJobs, setSavedJobs] = useState<Record<string, Job>>({});
     const [isLoading, setIsLoading] = useState(true);
@@ -802,7 +807,7 @@ export default function JobTrackBoard() {
         return saved || '7d';
     });
     const [isDemoMode, setIsDemoMode] = useState(false);
-    const [isAuthenticated, setIsAuthenticated] = useState(false);
+
 
     // Listen for scan config updates from ScanLogs
     useEffect(() => {
@@ -1038,26 +1043,17 @@ export default function JobTrackBoard() {
     useEffect(() => {
         async function fetchJobs() {
             try {
+                // If not authenticated, clear jobs (unless demo mode handles it elsewhere, but authenticated empty state relies on empty jobs)
+                if (!isAuthenticated) {
+                    // console.log("Not authenticated, skipping DB fetch");
+                    // We don't clear jobs here because Demo mode might be active?
+                    // Actually, Demo mode sets jobs via handleStartDemo.
+                    // If we just logged out, we might want to clear.
+                    // But if we are guest, we show empty or demo prompts.
+                    return;
+                }
+
                 setIsLoading(true);
-                const sessionId = localStorage.getItem('session_id');
-
-                // Check if authenticated
-                if (!sessionId) {
-                    console.log("Not authenticated, no data to load");
-                    setJobs([]);
-                    setIsLoading(false);
-                    return;
-                }
-
-                const authRes = await authApi.checkStatus();
-                setIsAuthenticated(authRes.authenticated);
-
-                if (!authRes.authenticated) {
-                    console.log("Not authenticated, no data to load");
-                    setJobs([]);
-                    setIsLoading(false);
-                    return;
-                }
 
                 // Fetch saved jobs from DB
                 const data = await jobsApi.getAll();
@@ -1076,7 +1072,7 @@ export default function JobTrackBoard() {
         }
 
         fetchJobs();
-    }, []); // Empty dependency array to run only once on mount
+    }, [isAuthenticated]); // Re-run when auth status changes
 
     const columns = useMemo(() => {
         const cols = new Map<Status, Job[]>();

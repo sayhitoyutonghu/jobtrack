@@ -160,7 +160,7 @@ const MainApp = () => {
       {/* Main Content */}
       <main className="flex-1 w-full h-full overflow-hidden bg-zinc-50 relative">
         <div className={view === 'board' ? 'h-full w-full' : 'hidden'}>
-          <JobTrackBoard />
+          <JobTrackBoard isAuthenticated={authStatus.authenticated} />
         </div>
 
         <div className={view === 'labels' ? 'p-8 max-w-5xl mx-auto h-full overflow-y-auto' : 'hidden'}>
