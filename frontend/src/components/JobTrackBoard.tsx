@@ -255,9 +255,10 @@ interface ColumnProps {
     onPlaceholderClick?: () => void;
     showWelcomeCard?: boolean;
     onStartDemo?: () => void;
+    isAuthenticated?: boolean;
 }
 
-const Column = ({ column, jobs, onJobClick, onPlaceholderClick, showWelcomeCard, onStartDemo }: ColumnProps) => {
+const Column = ({ column, jobs, onJobClick, onPlaceholderClick, showWelcomeCard, onStartDemo, isAuthenticated }: ColumnProps) => {
     const { setNodeRef } = useSortable({
         id: column.id,
         data: {
@@ -295,11 +296,11 @@ const Column = ({ column, jobs, onJobClick, onPlaceholderClick, showWelcomeCard,
                     strategy={verticalListSortingStrategy}
                 >
                     <div className="flex flex-col gap-1">
-                        {jobs.length === 0 && showWelcomeCard && column.id === 'Applied' && (
+                        {jobs.length === 0 && showWelcomeCard && column.id === 'Applied' && !isAuthenticated && (
                             <WelcomeCard onPlay={onStartDemo} />
                         )}
 
-                        {jobs.length === 0 && (!showWelcomeCard || column.id !== 'Applied') && (
+                        {jobs.length === 0 && (!showWelcomeCard || column.id !== 'Applied') && !isAuthenticated && (
                             <EmptyStatePlaceholder columnId={column.id} onClick={onPlaceholderClick} />
                         )}
 
@@ -758,6 +759,7 @@ export default function JobTrackBoard() {
         return saved || '7d';
     });
     const [isDemoMode, setIsDemoMode] = useState(false);
+    const [isAuthenticated, setIsAuthenticated] = useState(false);
 
     // Listen for scan config updates from ScanLogs
     useEffect(() => {
@@ -1005,6 +1007,7 @@ export default function JobTrackBoard() {
                 }
 
                 const authRes = await authApi.checkStatus();
+                setIsAuthenticated(authRes.authenticated);
 
                 if (!authRes.authenticated) {
                     console.log("Not authenticated, no data to load");
@@ -1243,6 +1246,7 @@ export default function JobTrackBoard() {
                                     }}
                                     showWelcomeCard={jobs.length === 0}
                                     onStartDemo={handleStartDemo}
+                                    isAuthenticated={isAuthenticated}
                                 />
                             </div>
                         ))}
