@@ -329,7 +329,7 @@ const Column = ({ column, jobs, onJobClick, onPlaceholderClick, showWelcomeCard,
                         )}
 
                         {/* 2. Authenticated: Scan Prompt */}
-                        {jobs.length === 0 && column.id === 'Applied' && isAuthenticated && (
+                        {jobs.length === 0 && column.id === 'Rejected' && isAuthenticated && (
                             <AuthenticatedEmptyState onClick={onPlaceholderClick} />
                         )}
 
