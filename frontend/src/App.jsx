@@ -11,6 +11,7 @@ import JobTrackBoard from './components/JobTrackBoard';
 import ScanLogs from './components/ScanLogs';
 import PrivacyPolicy from './components/PrivacyPolicy';
 import { authApi, gmailApi } from './api/client.js';
+import logo from './assets/logo.png';
 import './App.css';
 
 const MainApp = () => {
@@ -99,7 +100,7 @@ const MainApp = () => {
       <aside className="w-64 bg-white border-r border-zinc-200 flex flex-col">
         <div className="p-6 border-b border-zinc-100">
           <h1 className="text-xl font-bold tracking-tight flex items-center gap-2">
-            <span className="w-6 h-6 bg-black text-white flex items-center justify-center text-xs font-mono rounded-sm">#</span>
+            <img src={logo} alt="Logo" className="w-8 h-8 object-contain" />
             JobTrack
           </h1>
           <p className="text-xs text-zinc-500 mt-1">Gmail Job Tracking Control Center</p>
