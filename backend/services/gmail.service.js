@@ -241,9 +241,23 @@ class GmailService {
    */
   async applyLabelToThread(threadId, labelName, removeInbox = false) {
     try {
-      const label = await this.findLabel(labelName);
+      let label = await this.findLabel(labelName);
+
+      // Auto-create if missing
       if (!label) {
-        throw new Error(`Label ${labelName} not found. Run /setup first.`);
+        console.log(`Label ${labelName} not found. Attempting to create it...`);
+        const labelConfig = JOB_LABELS.find(l => l.name === labelName);
+        if (labelConfig) {
+          label = await this.createLabel(labelConfig);
+        } else {
+          // Fallback for custom labels not in JOB_LABELS (shouldn't happen often for core logic)
+          console.warn(`Label ${labelName} config not found. Creating with default settings.`);
+          label = await this.createCustomLabel({ name: labelName });
+        }
+      }
+
+      if (!label) {
+        throw new Error(`Failed to find or create label ${labelName}`);
       }
 
       const request = {

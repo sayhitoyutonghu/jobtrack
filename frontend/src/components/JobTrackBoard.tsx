@@ -26,7 +26,6 @@ import { CSS } from "@dnd-kit/utilities";
 import { clsx, type ClassValue } from "clsx";
 import { twMerge } from "tailwind-merge";
 import { GripVertical } from "lucide-react";
-import { GripVertical } from "lucide-react";
 import { gmailApi, authApi, jobsApi } from "../api/client.js";
 import WelcomeCard from "./WelcomeCard";
 import { MOCK_JOBS } from "../data/mockJobs";
@@ -800,491 +799,485 @@ export default function JobTrackBoard() {
         setJobs(prevJobs => prevJobs.map(job =>
             savedJobs[job.id] ? { ...job, ...savedJobs[job.id] } : job
         ));
-        useEffect(() => {
-            if (Object.keys(savedJobs).length === 0) return;
+    }, [savedJobs]);
+
+    const handleStartDemo = () => {
+        setJobs(MOCK_JOBS as unknown as Job[]);
+    };
+
+    const handleSaveJob = async (updatedJob: Job) => {
+        try {
+            // Optimistic update
+            setSavedJobs(prev => ({
+                ...prev,
+                [updatedJob.id]: updatedJob
+            }));
 
             setJobs(prevJobs => prevJobs.map(job =>
-                savedJobs[job.id] ? { ...job, ...savedJobs[job.id] } : job
+                job.id === updatedJob.id ? updatedJob : job
             ));
-        }, [savedJobs]);
 
-        const handleStartDemo = () => {
-            setJobs(MOCK_JOBS);
-        };
-
-        const handleSaveJob = async (updatedJob: Job) => {
-            try {
-                // Optimistic update
-                setSavedJobs(prev => ({
-                    ...prev,
-                    [updatedJob.id]: updatedJob
-                }));
-
-                setJobs(prevJobs => prevJobs.map(job =>
-                    job.id === updatedJob.id ? updatedJob : job
-                ));
-
-                if (selectedJob?.id === updatedJob.id) {
-                    setSelectedJob(updatedJob);
-                }
-
-                // Persist to backend if not in demo mode
-                if (!isDemoMode) {
-                    await jobsApi.update(updatedJob.id, updatedJob);
-                }
-
-                setScanMessage("✓ Job updated successfully");
-                setTimeout(() => setScanMessage(null), 3000);
-            } catch (error) {
-                console.error("Failed to save job:", error);
-                setScanMessage("❌ Failed to save job");
-                setTimeout(() => setScanMessage(null), 3000);
+            if (selectedJob?.id === updatedJob.id) {
+                setSelectedJob(updatedJob);
             }
-        };
 
-        const handleDeleteJob = async (jobId: string) => {
-            try {
-                if (!isDemoMode) {
-                    await jobsApi.delete(jobId);
-                }
-                setJobs(prevJobs => prevJobs.filter(j => j.id !== jobId));
-                setSelectedJob(null);
-            } catch (error) {
-                console.error("Failed to delete job:", error);
-                // Optionally show error toast
+            // Persist to backend if not in demo mode
+            if (!isDemoMode) {
+                await jobsApi.update(updatedJob.id, updatedJob);
             }
-        };
 
-        const handleDemoLoad = () => {
-            setIsDemoMode(true);
-            setJobs(FALLBACK_DATA);
-            setScanMessage("✨ Demo data loaded!");
+            setScanMessage("✓ Job updated successfully");
             setTimeout(() => setScanMessage(null), 3000);
-        };
+        } catch (error) {
+            console.error("Failed to save job:", error);
+            setScanMessage("❌ Failed to save job");
+            setTimeout(() => setScanMessage(null), 3000);
+        }
+    };
 
-        const handleScan = async () => {
-            setIsScanning(true);
-            setScanMessage(null);
+    const handleDeleteJob = async (jobId: string) => {
+        try {
+            if (!isDemoMode) {
+                await jobsApi.delete(jobId);
+            }
+            setJobs(prevJobs => prevJobs.filter(j => j.id !== jobId));
+            setSelectedJob(null);
+        } catch (error) {
+            console.error("Failed to delete job:", error);
+            // Optionally show error toast
+        }
+    };
 
-            // Check if authenticated
+    const handleDemoLoad = () => {
+        setIsDemoMode(true);
+        setJobs(FALLBACK_DATA);
+        setScanMessage("✨ Demo data loaded!");
+        setTimeout(() => setScanMessage(null), 3000);
+    };
+
+    const handleScan = async () => {
+        setIsScanning(true);
+        setScanMessage(null);
+
+        // Check if authenticated
+        const sessionId = localStorage.getItem('session_id');
+        if (!sessionId) {
+            // If not authenticated, trigger demo mode
+            handleDemoLoad();
+            setIsScanning(false);
+            return;
+        }
+
+        // Build query based on configuration
+        const sourceQuery = scanSource === 'inbox' ? 'in:inbox' : 'is:unread';
+        const query = `${sourceQuery} newer_than:${dateRange}`;
+
+        let scanSuccess = false;
+        let scanError = null;
+        let emailsScanned = 0;
+        let emailsFound = 0;
+        let processedEmails: Job[] = [];
+        let allScannedEmails: any[] = [];
+
+        try {
             const sessionId = localStorage.getItem('session_id');
             if (!sessionId) {
-                // If not authenticated, trigger demo mode
-                handleDemoLoad();
+                scanError = "Please sign in with Google first";
+                setScanMessage("⚠️ " + scanError);
+                setTimeout(() => setScanMessage(null), 3000);
                 setIsScanning(false);
                 return;
             }
 
-            // Build query based on configuration
-            const sourceQuery = scanSource === 'inbox' ? 'in:inbox' : 'is:unread';
-            const query = `${sourceQuery} newer_than:${dateRange}`;
+            // Use gmailApi which handles authentication headers automatically
+            const data = await gmailApi.scanEmails({
+                maxResults: maxResults,
+                query: query
+            });
 
-            let scanSuccess = false;
-            let scanError = null;
-            let emailsScanned = 0;
-            let emailsFound = 0;
-            let processedEmails: Job[] = [];
-            let allScannedEmails: any[] = [];
+            if (data.success && data.results) {
+                emailsScanned = data.results.length;
 
+                // Process ALL emails and add classification info
+                allScannedEmails = data.results.map((r: any) => ({
+                    id: r.id,
+                    subject: r.subject || "No subject",
+                    from: r.from || "Unknown",
+                    date: r.date || new Date().toISOString(),
+                    isJobEmail: !r.skipped && !!r.label,
+                    classification: r.label || "not_classified",
+                    skipped: r.skipped || false
+                }));
+
+                // Extract only job emails for the board
+                const newJobs = data.results
+                    .filter((r: any) => !r.skipped && r.label)
+                    .map((r: any) => ({
+                        id: r.id,
+                        company: extractCompany(r.subject || "", r.from || ""),
+                        role: extractRole(r.subject || ""),
+                        salary: "Unknown",
+                        status: mapLabelToStatus(r.label),
+                        location: extractLocation(r.subject || "", ""),
+                        description: r.subject,
+                        date: new Date().toISOString().split('T')[0],
+                        emailSnippet: r.subject || "No subject"
+                    }));
+
+                emailsFound = newJobs.length;
+                processedEmails = newJobs;
+
+                setJobs(prevJobs => {
+                    const existingIds = new Set(prevJobs.map(j => j.id));
+                    const uniqueNewJobs = newJobs.filter((j: Job) => !existingIds.has(j.id));
+
+                    // Merge with saved jobs using ref to avoid dependency
+                    const currentSavedJobs = savedJobsRef.current;
+                    const mergedJobs = [...prevJobs, ...uniqueNewJobs].map(job => {
+                        return currentSavedJobs[job.id] ? { ...job, ...currentSavedJobs[job.id] } : job;
+                    });
+
+                    return mergedJobs;
+                });
+
+                setLastScanTime(new Date());
+                scanSuccess = true;
+                setScanMessage(`✓ Found ${newJobs.length} job email${newJobs.length !== 1 ? 's' : ''}!`);
+                setTimeout(() => setScanMessage(null), 5000);
+            } else {
+                scanSuccess = true;
+                setScanMessage("No new emails found");
+                setTimeout(() => setScanMessage(null), 3000);
+            }
+
+            // Refresh jobs from DB to get latest state (including any newly scanned ones)
+            const dbJobs = await jobsApi.getAll();
+            if (dbJobs.success && dbJobs.jobs) {
+                setJobs(dbJobs.jobs);
+            }
+
+        } catch (e: any) {
+            console.error("Scan failed", e);
+            scanError = e.message || "Network error";
+            if (e.response?.status === 401) {
+                scanError = "Session expired - please sign in again";
+                setScanMessage("⚠️ " + scanError);
+                localStorage.removeItem('session_id');
+            } else {
+                setScanMessage("❌ Scan failed - " + scanError);
+            }
+            setTimeout(() => setScanMessage(null), 3000);
+        } finally {
+            setIsScanning(false);
+
+            // Emit scan event for logging
+            const eventDetail = {
+                success: scanSuccess,
+                emailsScanned: emailsScanned,
+                emailsFound: emailsFound,
+                query: query,
+                scanSource: scanSource,
+                dateRange: dateRange,
+                error: scanError,
+                allEmails: allScannedEmails,
+                jobEmails: processedEmails
+            };
+
+            console.log('[JobTrackBoard] Dispatching scanComplete event:', eventDetail);
+            window.dispatchEvent(new CustomEvent('scanComplete', {
+                detail: eventDetail
+            }));
+        }
+    };
+
+    useEffect(() => {
+        async function fetchJobs() {
             try {
+                setIsLoading(true);
                 const sessionId = localStorage.getItem('session_id');
+
+                // Check if authenticated
                 if (!sessionId) {
-                    scanError = "Please sign in with Google first";
-                    setScanMessage("⚠️ " + scanError);
-                    setTimeout(() => setScanMessage(null), 3000);
-                    setIsScanning(false);
+                    console.log("Not authenticated, no data to load");
+                    setJobs([]);
+                    setIsLoading(false);
                     return;
                 }
 
-                // Use gmailApi which handles authentication headers automatically
-                const data = await gmailApi.scanEmails({
-                    maxResults: maxResults,
-                    query: query
-                });
+                const authRes = await authApi.checkStatus();
 
-                if (data.success && data.results) {
-                    emailsScanned = data.results.length;
-
-                    // Process ALL emails and add classification info
-                    allScannedEmails = data.results.map((r: any) => ({
-                        id: r.id,
-                        subject: r.subject || "No subject",
-                        from: r.from || "Unknown",
-                        date: r.date || new Date().toISOString(),
-                        isJobEmail: !r.skipped && !!r.label,
-                        classification: r.label || "not_classified",
-                        skipped: r.skipped || false
-                    }));
-
-                    // Extract only job emails for the board
-                    const newJobs = data.results
-                        .filter((r: any) => !r.skipped && r.label)
-                        .map((r: any) => ({
-                            id: r.id,
-                            company: extractCompany(r.subject || "", r.from || ""),
-                            role: extractRole(r.subject || ""),
-                            salary: "Unknown",
-                            status: mapLabelToStatus(r.label),
-                            location: extractLocation(r.subject || "", ""),
-                            description: r.subject,
-                            date: new Date().toISOString().split('T')[0],
-                            emailSnippet: r.subject || "No subject"
-                        }));
-
-                    emailsFound = newJobs.length;
-                    processedEmails = newJobs;
-
-                    setJobs(prevJobs => {
-                        const existingIds = new Set(prevJobs.map(j => j.id));
-                        const uniqueNewJobs = newJobs.filter((j: Job) => !existingIds.has(j.id));
-
-                        // Merge with saved jobs using ref to avoid dependency
-                        const currentSavedJobs = savedJobsRef.current;
-                        const mergedJobs = [...prevJobs, ...uniqueNewJobs].map(job => {
-                            return currentSavedJobs[job.id] ? { ...job, ...currentSavedJobs[job.id] } : job;
-                        });
-
-                        return mergedJobs;
-                    });
-
-                    setLastScanTime(new Date());
-                    scanSuccess = true;
-                    setScanMessage(`✓ Found ${newJobs.length} job email${newJobs.length !== 1 ? 's' : ''}!`);
-                    setTimeout(() => setScanMessage(null), 5000);
-                } else {
-                    scanSuccess = true;
-                    setScanMessage("No new emails found");
-                    setTimeout(() => setScanMessage(null), 3000);
-                }
-
-                // Refresh jobs from DB to get latest state (including any newly scanned ones)
-                const dbJobs = await jobsApi.getAll();
-                if (dbJobs.success && dbJobs.jobs) {
-                    setJobs(dbJobs.jobs);
-                }
-
-            } catch (e: any) {
-                console.error("Scan failed", e);
-                scanError = e.message || "Network error";
-                if (e.response?.status === 401) {
-                    scanError = "Session expired - please sign in again";
-                    setScanMessage("⚠️ " + scanError);
-                    localStorage.removeItem('session_id');
-                } else {
-                    setScanMessage("❌ Scan failed - " + scanError);
-                }
-                setTimeout(() => setScanMessage(null), 3000);
-            } finally {
-                setIsScanning(false);
-
-                // Emit scan event for logging
-                const eventDetail = {
-                    success: scanSuccess,
-                    emailsScanned: emailsScanned,
-                    emailsFound: emailsFound,
-                    query: query,
-                    scanSource: scanSource,
-                    dateRange: dateRange,
-                    error: scanError,
-                    allEmails: allScannedEmails,
-                    jobEmails: processedEmails
-                };
-
-                console.log('[JobTrackBoard] Dispatching scanComplete event:', eventDetail);
-                window.dispatchEvent(new CustomEvent('scanComplete', {
-                    detail: eventDetail
-                }));
-            }
-        };
-
-        useEffect(() => {
-            async function fetchJobs() {
-                try {
-                    setIsLoading(true);
-                    const sessionId = localStorage.getItem('session_id');
-
-                    // Check if authenticated
-                    if (!sessionId) {
-                        console.log("Not authenticated, no data to load");
-                        setJobs([]);
-                        setIsLoading(false);
-                        return;
-                    }
-
-                    const authRes = await authApi.checkStatus();
-
-                    if (!authRes.authenticated) {
-                        console.log("Not authenticated, no data to load");
-                        setJobs([]);
-                        setIsLoading(false);
-                        return;
-                    }
-
-                    // Fetch saved jobs from DB
-                    const data = await jobsApi.getAll();
-
-                    if (data.success && data.jobs) {
-                        setJobs(data.jobs);
-                    } else {
-                        setJobs([]);
-                    }
-                } catch (error) {
-                    console.warn("Failed to fetch jobs:", error);
+                if (!authRes.authenticated) {
+                    console.log("Not authenticated, no data to load");
                     setJobs([]);
-                } finally {
                     setIsLoading(false);
-                }
-            }
-
-            fetchJobs();
-        }, []); // Empty dependency array to run only once on mount
-
-        const columns = useMemo(() => {
-            const cols = new Map<Status, Job[]>();
-            COLUMNS.forEach((c) => cols.set(c.id, []));
-            jobs.forEach((job) => {
-                const col = cols.get(job.status);
-                if (col) col.push(job);
-            });
-            return cols;
-        }, [jobs]);
-
-        // Sensors definition
-        const sensors = useSensors(
-            useSensor(PointerSensor, {
-                activationConstraint: {
-                    distance: 3, // 避免轻微抖动触发拖拽
-                },
-            }),
-            useSensor(KeyboardSensor, {
-                coordinateGetter: sortableKeyboardCoordinates,
-            })
-        );
-
-        // Logic: Find where we are dragging
-        const onDragStart = (event: DragStartEvent) => {
-            if (event.active.data.current?.type === "Job") {
-                setActiveJob(event.active.data.current.job);
-            }
-        };
-
-        const onDragOver = (event: DragOverEvent) => {
-            const { active, over } = event;
-            if (!over) return;
-
-            const activeId = active.id;
-            const overId = over.id;
-
-            if (activeId === overId) return;
-
-            const isActiveABot = active.data.current?.type === "Job";
-            const isOverABot = over.data.current?.type === "Job";
-            const isOverAColumn = over.data.current?.type === "Column";
-
-            if (!isActiveABot) return;
-
-            // Scenario 1: Dragging over another Job
-            if (isActiveABot && isOverABot) {
-                setJobs((jobs) => {
-                    const activeIndex = jobs.findIndex((j) => j.id === activeId);
-                    const overIndex = jobs.findIndex((j) => j.id === overId);
-
-                    if (jobs[activeIndex].status !== jobs[overIndex].status) {
-                        const newJobs = [...jobs];
-                        newJobs[activeIndex].status = jobs[overIndex].status;
-                        return arrayMove(newJobs, activeIndex, overIndex - 1); // Move to approximate new index
-                    }
-                    return arrayMove(jobs, activeIndex, overIndex);
-                });
-            }
-
-            // Scenario 2: Dragging over an empty Column
-            if (isActiveABot && isOverAColumn) {
-                setJobs((jobs) => {
-                    const activeIndex = jobs.findIndex((j) => j.id === activeId);
-                    const newStatus = over.id as Status;
-
-                    // If dropped in Trash, remove it
-                    if (newStatus === "Trash") {
-                        return jobs.filter(j => j.id !== activeId);
-                    }
-
-                    if (jobs[activeIndex].status !== newStatus) {
-                        const newJobs = [...jobs];
-                        newJobs[activeIndex].status = newStatus;
-                        return arrayMove(newJobs, activeIndex, activeIndex); // Just update status
-                    }
-                    return jobs;
-                });
-            }
-        };
-
-        const onDragEnd = (event: DragEndEvent) => {
-            const { active, over } = event;
-            setActiveJob(null);
-
-            if (!over) return;
-
-            const activeId = active.id as string;
-            const overId = over.id as string;
-
-            // Find the job and its new status
-            const job = jobs.find(j => j.id === activeId);
-            if (!job) return;
-
-            // If dropped on a column, the new status is the column ID
-            // If dropped on another job, the new status is that job's status
-            let newStatus: Status | undefined;
-
-            if (over.data.current?.type === "Column") {
-                newStatus = over.id as Status;
-            } else if (over.data.current?.type === "Job") {
-                const overJob = jobs.find(j => j.id === overId);
-                if (overJob) {
-                    newStatus = overJob.status;
-                }
-            }
-
-            // If status changed, persist it
-            if (newStatus && newStatus !== job.status && newStatus !== "Trash") {
-                // 1. Update savedJobsRef immediately to prevent reversion on re-render/fetch
-                if (savedJobsRef.current) {
-                    savedJobsRef.current = {
-                        ...savedJobsRef.current,
-                        [job.id]: {
-                            ...savedJobsRef.current[job.id],
-                            status: newStatus
-                        }
-                    };
+                    return;
                 }
 
-                // 2. Persist to backend if not in demo mode
-                if (!isDemoMode) {
-                    jobsApi.update(job.id, { status: newStatus }).catch(err => {
-                        console.error("Failed to persist drag and drop status change:", err);
-                        // Optionally revert UI here if needed, but for now we trust optimistic update
-                    });
+                // Fetch saved jobs from DB
+                const data = await jobsApi.getAll();
+
+                if (data.success && data.jobs) {
+                    setJobs(data.jobs);
+                } else {
+                    setJobs([]);
                 }
+            } catch (error) {
+                console.warn("Failed to fetch jobs:", error);
+                setJobs([]);
+            } finally {
+                setIsLoading(false);
             }
-        };
-
-        // Custom Drop Animation to remove blur and keep crisp edges
-        const dropAnimation: DropAnimation = {
-            sideEffects: defaultDropAnimationSideEffects({
-                styles: {
-                    active: {
-                        opacity: "0.5",
-                    },
-                },
-            }),
-        };
-
-        if (isLoading) {
-            return (
-                <div className="min-h-screen bg-zinc-50 flex items-center justify-center font-mono">
-                    <div className="animate-pulse text-xl font-bold tracking-widest">
-                        &gt; SYSTEM_INITIALIZING..._
-                    </div>
-                </div>
-            );
         }
 
+        fetchJobs();
+    }, []); // Empty dependency array to run only once on mount
+
+    const columns = useMemo(() => {
+        const cols = new Map<Status, Job[]>();
+        COLUMNS.forEach((c) => cols.set(c.id, []));
+        jobs.forEach((job) => {
+            const col = cols.get(job.status);
+            if (col) col.push(job);
+        });
+        return cols;
+    }, [jobs]);
+
+    // Sensors definition
+    const sensors = useSensors(
+        useSensor(PointerSensor, {
+            activationConstraint: {
+                distance: 3, // 避免轻微抖动触发拖拽
+            },
+        }),
+        useSensor(KeyboardSensor, {
+            coordinateGetter: sortableKeyboardCoordinates,
+        })
+    );
+
+    // Logic: Find where we are dragging
+    const onDragStart = (event: DragStartEvent) => {
+        if (event.active.data.current?.type === "Job") {
+            setActiveJob(event.active.data.current.job);
+        }
+    };
+
+    const onDragOver = (event: DragOverEvent) => {
+        const { active, over } = event;
+        if (!over) return;
+
+        const activeId = active.id;
+        const overId = over.id;
+
+        if (activeId === overId) return;
+
+        const isActiveABot = active.data.current?.type === "Job";
+        const isOverABot = over.data.current?.type === "Job";
+        const isOverAColumn = over.data.current?.type === "Column";
+
+        if (!isActiveABot) return;
+
+        // Scenario 1: Dragging over another Job
+        if (isActiveABot && isOverABot) {
+            setJobs((jobs) => {
+                const activeIndex = jobs.findIndex((j) => j.id === activeId);
+                const overIndex = jobs.findIndex((j) => j.id === overId);
+
+                if (jobs[activeIndex].status !== jobs[overIndex].status) {
+                    const newJobs = [...jobs];
+                    newJobs[activeIndex].status = jobs[overIndex].status;
+                    return arrayMove(newJobs, activeIndex, overIndex - 1); // Move to approximate new index
+                }
+                return arrayMove(jobs, activeIndex, overIndex);
+            });
+        }
+
+        // Scenario 2: Dragging over an empty Column
+        if (isActiveABot && isOverAColumn) {
+            setJobs((jobs) => {
+                const activeIndex = jobs.findIndex((j) => j.id === activeId);
+                const newStatus = over.id as Status;
+
+                // If dropped in Trash, remove it
+                if (newStatus === "Trash") {
+                    return jobs.filter(j => j.id !== activeId);
+                }
+
+                if (jobs[activeIndex].status !== newStatus) {
+                    const newJobs = [...jobs];
+                    newJobs[activeIndex].status = newStatus;
+                    return arrayMove(newJobs, activeIndex, activeIndex); // Just update status
+                }
+                return jobs;
+            });
+        }
+    };
+
+    const onDragEnd = (event: DragEndEvent) => {
+        const { active, over } = event;
+        setActiveJob(null);
+
+        if (!over) return;
+
+        const activeId = active.id as string;
+        const overId = over.id as string;
+
+        // Find the job and its new status
+        const job = jobs.find(j => j.id === activeId);
+        if (!job) return;
+
+        // If dropped on a column, the new status is the column ID
+        // If dropped on another job, the new status is that job's status
+        let newStatus: Status | undefined;
+
+        if (over.data.current?.type === "Column") {
+            newStatus = over.id as Status;
+        } else if (over.data.current?.type === "Job") {
+            const overJob = jobs.find(j => j.id === overId);
+            if (overJob) {
+                newStatus = overJob.status;
+            }
+        }
+
+        // If status changed, persist it
+        if (newStatus && newStatus !== job.status && newStatus !== "Trash") {
+            // 1. Update savedJobsRef immediately to prevent reversion on re-render/fetch
+            if (savedJobsRef.current) {
+                savedJobsRef.current = {
+                    ...savedJobsRef.current,
+                    [job.id]: {
+                        ...savedJobsRef.current[job.id],
+                        status: newStatus
+                    }
+                };
+            }
+
+            // 2. Persist to backend if not in demo mode
+            if (!isDemoMode) {
+                jobsApi.update(job.id, { status: newStatus }).catch(err => {
+                    console.error("Failed to persist drag and drop status change:", err);
+                    // Optionally revert UI here if needed, but for now we trust optimistic update
+                });
+            }
+        }
+    };
+
+    // Custom Drop Animation to remove blur and keep crisp edges
+    const dropAnimation: DropAnimation = {
+        sideEffects: defaultDropAnimationSideEffects({
+            styles: {
+                active: {
+                    opacity: "0.5",
+                },
+            },
+        }),
+    };
+
+    if (isLoading) {
         return (
-            <div className="h-full w-full bg-zinc-50 text-black font-mono p-4 md:p-8 flex flex-col overflow-hidden">
-                {/* Page Header */}
-                <header className="mb-6 border-b-4 border-black pb-4 flex flex-col md:flex-row justify-between items-start md:items-end gap-4 shrink-0">
-                    <div>
-                        <h1 className="text-4xl md:text-5xl font-black tracking-tighter uppercase mb-2 flex items-center gap-4">
-                            <span className="bg-black text-white px-3 py-1 text-2xl block transform -rotate-2 border-2 border-white shadow-[4px_4px_0px_0px_rgba(0,0,0,0.3)]">
-                                #
-                            </span>
-                            JobTrack_v2.0
-                        </h1>
-                        <p className="text-sm md:text-base font-bold opacity-60 uppercase tracking-widest ml-1">
-                            Drag_and_Drop Interface // Secure_Mode
-                        </p>
-                    </div>
-                    <button
-                        onClick={handleScan}
-                        disabled={isScanning}
-                        className={cn(
-                            "bg-black text-white px-6 py-3 font-bold uppercase tracking-wider border-2 border-black hover:bg-white hover:text-black transition-all shadow-[4px_4px_0px_0px_rgba(0,0,0,0.3)] hover:shadow-[2px_2px_0px_0px_rgba(0,0,0,0.3)] hover:translate-y-0.5 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2",
-                            // Add breathing animation if Applied column is empty
-                            (columns.get('Applied')?.length === 0 && !isScanning) && "animate-pulse"
-                        )}
-                    >
-                        {isScanning ? (
-                            <>
-                                <span className="animate-spin">⏳</span> Scanning...
-                            </>
-                        ) : (
-                            <>
-                                <span>🔍</span> Scan Gmail
-                            </>
-                        )}
-                    </button>
-                </header>
-
-                {/* Kanban Board Area */}
-                <DndContext
-                    sensors={sensors}
-                    collisionDetection={closestCorners}
-                    onDragStart={onDragStart}
-                    onDragOver={onDragOver}
-                    onDragEnd={onDragEnd}
-                >
-                    <div className="flex-1 flex flex-col md:flex-row gap-4 w-full h-full min-h-0">
-                        {/* Main Grid for Columns */}
-                        <div className="flex-1 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 h-full min-h-0">
-                            {COLUMNS.map((col) => (
-                                <div key={col.id} className="h-full min-h-0 flex flex-col">
-                                    <Column
-                                        column={col}
-                                        jobs={jobs.filter((job) => job.status === col.id)}
-                                        onJobClick={setSelectedJob}
-                                        onPlaceholderClick={() => {
-                                            if (col.id === 'Applied') {
-                                                setIsScanning(true);
-                                                // Trigger scan logic here...
-                                            }
-                                        }}
-                                        showWelcomeCard={jobs.length === 0}
-                                        onStartDemo={handleStartDemo}
-                                    />
-                                </div>
-                            ))}
-                        </div>
-
-                        {/* Trash Bin - Side on Desktop, Bottom on Mobile */}
-                        <div className="shrink-0">
-                            <TrashBin />
-                        </div>
-                    </div>
-
-                    {/* Drag Overlay (The floating card) */}
-                    <DragOverlay dropAnimation={dropAnimation}>
-                        {activeJob ? (
-                            <JobCard job={activeJob} isOverlay />
-                        ) : null}
-                    </DragOverlay>
-                </DndContext>
-
-                {/* Job Details Modal */}
-                {selectedJob && (
-                    <JobDetailsModal
-                        job={selectedJob}
-                        onClose={() => setSelectedJob(null)}
-                        onDelete={handleDeleteJob}
-                        onSave={handleSaveJob}
-                    />
-                )}
-
-                {/* Toast Notification */}
-                {scanMessage && (
-                    <div className="fixed top-4 right-4 z-50 bg-black text-white px-6 py-3 border-2 border-white shadow-[4px_4px_0px_0px_rgba(255,255,255,0.3)] font-mono text-sm animate-slide-in">
-                        {scanMessage}
-                    </div>
-                )}
+            <div className="min-h-screen bg-zinc-50 flex items-center justify-center font-mono">
+                <div className="animate-pulse text-xl font-bold tracking-widest">
+                    &gt; SYSTEM_INITIALIZING..._
+                </div>
             </div>
         );
     }
+
+    return (
+        <div className="h-full w-full bg-zinc-50 text-black font-mono p-4 md:p-8 flex flex-col overflow-hidden">
+            {/* Page Header */}
+            <header className="mb-6 border-b-4 border-black pb-4 flex flex-col md:flex-row justify-between items-start md:items-end gap-4 shrink-0">
+                <div>
+                    <h1 className="text-4xl md:text-5xl font-black tracking-tighter uppercase mb-2 flex items-center gap-4">
+                        <span className="bg-black text-white px-3 py-1 text-2xl block transform -rotate-2 border-2 border-white shadow-[4px_4px_0px_0px_rgba(0,0,0,0.3)]">
+                            #
+                        </span>
+                        JobTrack_v2.0
+                    </h1>
+                    <p className="text-sm md:text-base font-bold opacity-60 uppercase tracking-widest ml-1">
+                        Drag_and_Drop Interface // Secure_Mode
+                    </p>
+                </div>
+                <button
+                    onClick={handleScan}
+                    disabled={isScanning}
+                    className={cn(
+                        "bg-black text-white px-6 py-3 font-bold uppercase tracking-wider border-2 border-black hover:bg-white hover:text-black transition-all shadow-[4px_4px_0px_0px_rgba(0,0,0,0.3)] hover:shadow-[2px_2px_0px_0px_rgba(0,0,0,0.3)] hover:translate-y-0.5 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2",
+                        // Add breathing animation if Applied column is empty
+                        (columns.get('Applied')?.length === 0 && !isScanning) && "animate-pulse"
+                    )}
+                >
+                    {isScanning ? (
+                        <>
+                            <span className="animate-spin">⏳</span> Scanning...
+                        </>
+                    ) : (
+                        <>
+                            <span>🔍</span> Scan Gmail
+                        </>
+                    )}
+                </button>
+            </header>
+
+            {/* Kanban Board Area */}
+            <DndContext
+                sensors={sensors}
+                collisionDetection={closestCorners}
+                onDragStart={onDragStart}
+                onDragOver={onDragOver}
+                onDragEnd={onDragEnd}
+            >
+                <div className="flex-1 flex flex-col md:flex-row gap-4 w-full h-full min-h-0">
+                    {/* Main Grid for Columns */}
+                    <div className="flex-1 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 h-full min-h-0">
+                        {COLUMNS.map((col) => (
+                            <div key={col.id} className="h-full min-h-0 flex flex-col">
+                                <Column
+                                    column={col}
+                                    jobs={jobs.filter((job) => job.status === col.id)}
+                                    onJobClick={setSelectedJob}
+                                    onPlaceholderClick={() => {
+                                        if (col.id === 'Applied') {
+                                            setIsScanning(true);
+                                            // Trigger scan logic here...
+                                        }
+                                    }}
+                                    showWelcomeCard={jobs.length === 0}
+                                    onStartDemo={handleStartDemo}
+                                />
+                            </div>
+                        ))}
+                    </div>
+
+                    {/* Trash Bin - Side on Desktop, Bottom on Mobile */}
+                    <div className="shrink-0">
+                        <TrashBin />
+                    </div>
+                </div>
+
+                {/* Drag Overlay (The floating card) */}
+                <DragOverlay dropAnimation={dropAnimation}>
+                    {activeJob ? (
+                        <JobCard job={activeJob} isOverlay />
+                    ) : null}
+                </DragOverlay>
+            </DndContext>
+
+            {/* Job Details Modal */}
+            {selectedJob && (
+                <JobDetailsModal
+                    job={selectedJob}
+                    onClose={() => setSelectedJob(null)}
+                    onDelete={handleDeleteJob}
+                    onSave={handleSaveJob}
+                />
+            )}
+
+            {/* Toast Notification */}
+            {scanMessage && (
+                <div className="fixed top-4 right-4 z-50 bg-black text-white px-6 py-3 border-2 border-white shadow-[4px_4px_0px_0px_rgba(255,255,255,0.3)] font-mono text-sm animate-slide-in">
+                    {scanMessage}
+                </div>
+            )}
+        </div>
+    );
+}
