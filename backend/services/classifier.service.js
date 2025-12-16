@@ -554,7 +554,6 @@ Body: "${trimmedBody}"`;
       // Job discovery alerts - specific ones
       { pattern: /(\bnew jobs? in\b)/, category: 'application' }
     ];
-    ];
 
     for (const rule of phraseRules) {
       if (rule.pattern.test(text)) {
