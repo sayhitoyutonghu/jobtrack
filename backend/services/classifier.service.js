@@ -537,22 +537,24 @@ Body: "${trimmedBody}"`;
     const looksGenericContent = /\b(how to|guide|newsletter|daily update|tips|blog)\b/.test(subject);
 
     const phraseRules = [
-      // Application confirmations - expanded patterns
+    const phraseRules = [
+      // 1. Offer (Highest Priority)
+      { pattern: /(job offer|offer letter|offer details|accept (the )?offer|start date|compensation|onboarding)/, category: 'offer' },
+
+      // 2. Interview
+      { pattern: /(interview|schedule d?an interview|availability for interview|invite(d)? you to interview)/, category: 'interview' },
+
+      // 3. Rejected (Explicit "not moving forward" overrides generic "application" subject)
+      { pattern: /(reject|not (be |to )?moving forward|no longer moving forward|decline your application|will not be moving forward|unfortunately.*not)/, category: 'rejected' },
+
+      // 4. Application (Confirmation/generic updates - Lowest Priority heuristic)
       { pattern: /(application (was )?received|thank you for applying|we received your application)/, category: 'application' },
       { pattern: /(your application (to|for|as)|application to|application for)/, category: 'application' },
       { pattern: /(application was viewed|viewed your application|application reviewed)/, category: 'application' },
-      // Specific GitHub confirmation
       { pattern: /thank you for including github in your job search/i, category: 'application' },
-      // Removed generic "job alert" patterns that were causing false positives
-      { pattern: /(now hiring|hiring in )/, category: 'application' },
-      // Job discovery alerts - kept only specific ones that might be relevant, removed generic "found jobs"
-      { pattern: /(\bnew jobs? in\b)/, category: 'application' },
-      // Interview
-      { pattern: /(interview|schedule d?an interview|availability for interview|invite(d)? you to interview)/, category: 'interview' },
-      // Offer: require stronger patterns to avoid generic "special offer" matches
-      { pattern: /(job offer|offer letter|offer details|accept (the )?offer|start date|compensation|onboarding)/, category: 'offer' },
-      // Rejection - expanded patterns
-      { pattern: /(reject|not (be |to )?moving forward|no longer moving forward|decline your application|will not be moving forward|unfortunately.*not)/, category: 'rejected' }  // UPDATED: added "not to move forward" support
+      // Job discovery alerts - specific ones
+      { pattern: /(\bnew jobs? in\b)/, category: 'application' }
+    ];
     ];
 
     for (const rule of phraseRules) {
