@@ -6,6 +6,7 @@ const AILabelAnalyzerService = require('../services/ai-label-analyzer.service');
 const CustomLabelClassifier = require('../services/custom-label-classifier.service');
 const { JOB_LABELS } = require('../config/labels');
 const AutoScanService = require('../services/autoscan.service');
+const Job = require('../models/Job');
 
 /**
  * POST /api/gmail/setup
@@ -306,6 +307,38 @@ router.post('/scan', async (req, res) => {
         // No conflict removal needed since Finance/Receipt is disabled
         const removedLabels = [];
 
+        // Save to MongoDB (Persistence)
+        try {
+          const userEmail = await gmailService.getUserEmail();
+          const STATUS_MAP = {
+            'Application': 'Applied',
+            'Interview': 'Interviewing',
+            'Offer': 'Offer',
+            'Rejected': 'Rejected',
+            'Ghost': 'Rejected'
+          };
+
+          await Job.findOneAndUpdate(
+            { originalEmailId: email.id },
+            {
+              userId: userEmail,
+              company: classification.company || 'Unknown Company',
+              role: classification.role || 'Unknown Role',
+              status: STATUS_MAP[classification.label] || 'Applied',
+              salary: classification.salary || 'Unknown',
+              location: classification.location || 'Unknown',
+              date: new Date(email.internalDate),
+              emailSnippet: classification.emailSnippet || email.snippet,
+              description: email.subject,
+              originalEmailId: email.id
+            },
+            { upsert: true, new: true }
+          );
+          console.log(`💾 [scan] saved job ${email.id} to DB`);
+        } catch (dbError) {
+          console.error(`❌ [scan] save to DB failed for ${email.id}:`, dbError.message);
+        }
+
         results.push({
           id: email.id,
           threadId: email.threadId,
@@ -316,7 +349,14 @@ router.post('/scan', async (req, res) => {
           method: classification.method,
           movedToFolder: classification.config.moveToFolder,
           threadLabels,
-          removedLabels
+          removedLabels,
+          // Start of Frontend Sync Support
+          jobData: {
+            company: classification.company,
+            role: classification.role,
+            salary: classification.salary,
+            emailSnippet: classification.emailSnippet
+          }
         });
 
         await seenCache.set(message.id, { labeled: classification.label, method: classification.method, at: Date.now() });
