@@ -537,7 +537,6 @@ Body: "${trimmedBody}"`;
     const looksGenericContent = /\b(how to|guide|newsletter|daily update|tips|blog)\b/.test(subject);
 
     const phraseRules = [
-    const phraseRules = [
       // 1. Offer (Highest Priority)
       { pattern: /(job offer|offer letter|offer details|accept (the )?offer|start date|compensation|onboarding)/, category: 'offer' },
 
