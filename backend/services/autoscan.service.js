@@ -82,23 +82,28 @@ class AutoScanService {
               // We'll use the 'Delivered-To' header or just the first 'To' address.
               // Or better, we fetch the profile once at start of tick.
 
-              const userEmail = await gmail.getUserEmail(); // We need to add this method to GmailService
+              const userEmail = await gmail.getUserEmail();
+
+              const STATUS_MAP = {
+                'Application': 'Applied',
+                'Interview': 'Interviewing',
+                'Offer': 'Offer',
+                'Rejected': 'Rejected',
+                'Ghost': 'Rejected'
+              };
 
               await Job.findOneAndUpdate(
                 { originalEmailId: email.id },
                 {
                   userId: userEmail,
-                  company: cls.company || 'Unknown Company', // Classifier needs to return company
-                  role: cls.role || 'Unknown Role', // Classifier needs to return role
-                  status: cls.label, // Map label to status? Label is 'Application', 'Interview' etc.
-                  // Status enum: ['Applied', 'Interviewing', 'Offer', 'Rejected']
-                  // Label: 'Application', 'Interview', 'Offer', 'Rejected'
-                  // Need to map.
+                  company: cls.company || 'Unknown Company',
+                  role: cls.role || 'Unknown Role',
+                  status: STATUS_MAP[cls.label] || 'Applied',
                   salary: cls.salary || 'Unknown',
                   location: cls.location || 'Unknown',
                   date: new Date(email.internalDate),
-                  emailSnippet: email.snippet,
-                  description: email.subject,
+                  emailSnippet: cls.emailSnippet || email.snippet,
+                  description: email.subject, // Keep description as subject for now, or use snippet
                   originalEmailId: email.id
                 },
                 { upsert: true, new: true }

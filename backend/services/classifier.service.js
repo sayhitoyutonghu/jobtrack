@@ -96,96 +96,89 @@ class EmailClassifier {
     const body = safe(email.body);
     const trimmedBody = body.length > 2000 ? `${body.slice(0, 2000)}...` : body;
 
-    return `You are an assistant that classifies job-search related emails into one of five categories. Follow the rules strictly.
+    return `You are an expert email analyzer for job applications.
+Analyze the email and extract key details into a JSON object.
 
 Categories:
-- application: Job applications, resume submissions, status updates, alerts
-- interview: Interview invitations and scheduling
-- offer: Job offers, compensation details, onboarding
-- rejected: Rejection notices
-- ghost: No response for 30+ days
-- other: Non-job related content
+- application: You applied or application received
+- interview: Interview invitation or scheduling
+- offer: Job offer or salary negotiation
+- rejected: Rejection email
+- ghost: No response for 30+ days (if analyzing history)
+- other: Newsletters, marketing, or non-job related
+
+Output Schema (JSON):
+{
+  "category": "application" | "interview" | "offer" | "rejected" | "ghost" | "other",
+  "company": "Company Name" (or "Unknown"),
+  "role": "Job Title" (or "Unknown"),
+  "salary": "Salary/Rate" (or "Unknown"),
+  "summary": "Brief 1-sentence summary of the status"
+}
 
 Instructions:
-1. Base decisions on full email content. Use subject and summary if content is missing.
-2. First check if job-related; return "other" if not.
-3. **IMPORTANT**: If email is just a reminder to complete/finish application (not confirmation), classify as "other".
-4. If email confirms application was RECEIVED/SUBMITTED, classify as "application".
-5. If about interview scheduling/confirmation, classify as "interview".
-6. If mentions offer/package/compensation/onboarding, classify as "offer".
-7. If application rejected or not selected, classify as "rejected".
-8. If self-sent and no response for long time, classify as "ghost".
-9. If introducing new recruiter/headhunter, classify as "application".
-10. For general news/marketing/newsletters/updates, classify as "other".
-11. If contains unsubscribe/preferences/newsletter/daily update, prioritize as "other".
-12. Must output only one category: application/interview/offer/rejected/ghost/other.
-
-Examples:
-- Example 1 → "application":
-  Subject: "Your application was received"
-  Body: "Thank you for applying. Our team will review your resume."
-  
-- Example 2 → "other":
-  Subject: "Don't forget to complete your application to Informa"
-  Body: "Almost there! We saved your application for you. Click to continue."
-  Reason: This is a reminder to complete, not a confirmation of submission.
-  
-- Example 3 → "other":
-  Subject: "The Morning: E-bike injuries"
-  Body: "Today's news roundup from The New York Times..."
-  Reason: Newsletter, not job-related.
-  
-- Example 4 → "application":
-  Subject: "Your application as Junior Graphic Designer"
-  Body: "We have received your job application and will begin our review process..."
-  Reason: Confirmation that application was received.
-  
-- Example 5 → "interview":
-  Subject: "Interview availability"
-  Body: "We would like to schedule a technical interview next week."
-  
-- Example 6 → "offer":
-  Subject: "Offer details"
-  Body: "We are pleased to offer you the position with a starting salary..."
-  
-- Example 7 → "rejected":
-  Subject: "Application update"
-  Body: "We appreciate your interest but will not move forward."
-  
-- Example 8 → "application":
-  Subject: "Intro: You x Recruiter"
-  Body: "Let me introduce you to our recruiter who is hiring for several roles."
+1. Extract the **Company Name** from the sender or subject.
+2. Extract the **Job Title/Role** if mentioned.
+3. Extract **Salary** if mentioned (e.g. "$100k-$120k", "$80/hr").
+4. Classify based on the stronger signal (e.g. "Interview" > "Application").
+5. Return ONLY the JSON object. No markdown formatting.
 
 Email to classify:
 Subject: "${safe(email.subject)}"
-Body: "${trimmedBody}"
-
-Respond with only one label (lowercase).`;
+Body: "${trimmedBody}"`;
   }
 
   parseCategory(rawText) {
     if (!rawText) return null;
 
     let text = rawText;
+    if (Array.isArray(text)) text = text.join(' ');
+    text = text.toString().trim();
 
-    if (Array.isArray(text)) {
-      text = text.join(' ');
+    // Remove markdown code blocks if present
+    text = text.replace(/```json/g, '').replace(/```/g, '').trim();
+
+    try {
+      const json = JSON.parse(text);
+      return {
+        category: json.category?.toLowerCase() || 'other',
+        company: json.company || 'Unknown',
+        role: json.role || 'Unknown',
+        salary: json.salary || 'Unknown',
+        summary: json.summary || ''
+      };
+    } catch (e) {
+      // Fallback: simple string match (legacy behavior)
+      console.warn('⚠ AI returned non-JSON, falling back to string match:', text);
+      const lower = text.toLowerCase();
+      const validCategories = ['application', 'interview', 'offer', 'rejected', 'ghost', 'other'];
+
+      for (const cat of validCategories) {
+        if (lower.includes(cat)) {
+          return { category: cat, company: 'Unknown', role: 'Unknown', salary: 'Unknown', summary: '' };
+        }
+      }
+      return { category: 'other', company: 'Unknown', role: 'Unknown', salary: 'Unknown', summary: '' };
     }
-
-    text = text.toString().trim().toLowerCase();
-
-    const validCategories = ['application', 'interview', 'offer', 'rejected', 'ghost', 'other'];
-    if (validCategories.includes(text)) {
-      return text;
-    }
-
-    return null;
   }
 
-  createResult(category, confidence = 'medium', method = 'ai', extras = {}) {
-    if (!category) return null;
+  createResult(parsedData, confidence = 'medium', method = 'ai', extras = {}) {
+    if (!parsedData) return null;
 
-    const labelConfig = JOB_LABELS.find(label => label.name.toLowerCase() === category);
+    let categoryName = parsedData;
+    let extractedDetails = {};
+
+    if (typeof parsedData === 'object') {
+      categoryName = parsedData.category;
+      extractedDetails = {
+        company: parsedData.company,
+        role: parsedData.role,
+        salary: parsedData.salary,
+        emailSnippet: parsedData.summary
+      };
+    }
+
+    const labelConfig = JOB_LABELS.find(label => label.name.toLowerCase() === categoryName);
     if (!labelConfig) return null;
 
     return {
@@ -194,6 +187,7 @@ Respond with only one label (lowercase).`;
       method,
       reason: extras.reason || `Classified by ${method}`,
       ...extras,
+      ...extractedDetails,
       config: labelConfig
     };
   }

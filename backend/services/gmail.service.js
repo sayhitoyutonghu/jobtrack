@@ -13,6 +13,19 @@ class GmailService {
   }
 
   /**
+   * Get user's email address from profile
+   */
+  async getUserEmail() {
+    try {
+      const res = await this.gmail.users.getProfile({ userId: 'me' });
+      return res.data.emailAddress;
+    } catch (error) {
+      console.error('Failed to get user profile:', error);
+      return 'unknown_user';
+    }
+  }
+
+  /**
    * Create or update a colored label in Gmail
    */
   async createLabel(labelConfig) {

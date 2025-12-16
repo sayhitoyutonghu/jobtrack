@@ -886,12 +886,17 @@ export default function JobTrackBoard({ isAuthenticated }: JobTrackBoardProps) {
     };
 
     const handleDeleteJob = async (jobId: string) => {
+        console.log('[JobTrackBoard] Deleting job:', jobId);
         try {
             if (!isDemoMode) {
-                await jobsApi.delete(jobId);
+                const res = await jobsApi.delete(jobId);
+                console.log('[JobTrackBoard] Delete response:', res);
+            } else {
+                console.log('[JobTrackBoard] Demo mode delete (no API call)');
             }
             setJobs(prevJobs => prevJobs.filter(j => j.id !== jobId));
             setSelectedJob(null);
+            console.log('[JobTrackBoard] Job removed from state');
         } catch (error) {
             console.error("Failed to delete job:", error);
             // Optionally show error toast
