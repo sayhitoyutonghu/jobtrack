@@ -100,28 +100,45 @@ class EmailClassifier {
 Analyze the email and extract key details into a JSON object.
 
 Categories:
-- application: You applied or application received
-- interview: Interview invitation or scheduling
+- application: You ACTUALLY applied to a job and received confirmation (e.g., "Application received", "Thank you for applying")
+  ❌ NOT: Job alerts, job recommendations, "jobs for you", newsletters
+  ✅ Examples: "Your application to Google was received", "Thank you for applying to Software Engineer"
+  
+- interview: Interview invitation, scheduling, or confirmation
+  ✅ Examples: "Schedule an interview", "Interview invitation", "Available for interview?"
+  
 - offer: Job offer or salary negotiation
-- rejected: Rejection email
-- ghost: No response for 30+ days (if analyzing history)
-- other: Newsletters, marketing, or non-job related
+  ✅ Examples: "Job offer", "Offer letter", "We'd like to extend an offer"
+  
+- rejected: Explicit rejection
+  ✅ Examples: "Not moving forward", "Declined", "Unfortunately we won't be proceeding"
+  
+- ghost: No response for 30+ days (rare, only if explicitly analyzing old threads)
+  
+- other: Everything else including:
+  • Job alerts/recommendations ("Jobs for you", "New jobs in your area")
+  • Newsletters ("Weekly digest", "Career tips")
+  • Reminders ("Complete your application", "Finish your profile")
+  • Marketing emails
 
 Output Schema (JSON):
 {
   "category": "application" | "interview" | "offer" | "rejected" | "ghost" | "other",
+  "confidence": 0-100 (how confident you are in this classification),
   "company": "Company Name" (or "Unknown"),
   "role": "Job Title" (or "Unknown"),
   "salary": "Salary/Rate" (or "Unknown"),
-  "summary": "Brief 1-sentence summary of the status"
+  "summary": "Brief 1-sentence summary"
 }
 
 Instructions:
-1. Extract the **Company Name** from the sender or subject.
-2. Extract the **Job Title/Role** if mentioned.
-3. Extract **Salary** if mentioned (e.g. "$100k-$120k", "$80/hr").
-4. Classify based on the stronger signal (e.g. "Interview" > "Application").
-5. Return ONLY the JSON object. No markdown formatting.
+1. Extract **Company Name** from sender or email body.
+2. Extract **Job Title/Role** if mentioned.
+3. Extract **Salary** if mentioned (e.g., "$100k-$120k", "$80/hr").
+4. Classify based on the STRONGEST signal (e.g., "Interview" > "Application").
+5. **CRITICAL**: Distinguish job alerts from actual applications - if it's promoting jobs, it's "other".
+6. Set confidence 80-100 if very clear, 50-79 if somewhat clear, 0-49 if uncertain.
+7. Return ONLY the JSON object. No markdown formatting.
 
 Email to classify:
 Subject: "${safe(email.subject)}"
@@ -140,12 +157,21 @@ Body: "${trimmedBody}"`;
 
     try {
       const json = JSON.parse(text);
+
+      // Map confidence score to level
+      let confidenceLevel = 'medium';
+      const confidenceScore = json.confidence || 50;
+      if (confidenceScore >= 80) confidenceLevel = 'high';
+      else if (confidenceScore < 50) confidenceLevel = 'low';
+
       return {
         category: json.category?.toLowerCase() || 'other',
         company: json.company || 'Unknown',
         role: json.role || 'Unknown',
         salary: json.salary || 'Unknown',
-        summary: json.summary || ''
+        summary: json.summary || '',
+        confidenceScore: confidenceScore,
+        confidenceLevel: confidenceLevel
       };
     } catch (e) {
       // Fallback: simple string match (legacy behavior)
@@ -155,10 +181,26 @@ Body: "${trimmedBody}"`;
 
       for (const cat of validCategories) {
         if (lower.includes(cat)) {
-          return { category: cat, company: 'Unknown', role: 'Unknown', salary: 'Unknown', summary: '' };
+          return {
+            category: cat,
+            company: 'Unknown',
+            role: 'Unknown',
+            salary: 'Unknown',
+            summary: '',
+            confidenceScore: 30,
+            confidenceLevel: 'low'
+          };
         }
       }
-      return { category: 'other', company: 'Unknown', role: 'Unknown', salary: 'Unknown', summary: '' };
+      return {
+        category: 'other',
+        company: 'Unknown',
+        role: 'Unknown',
+        salary: 'Unknown',
+        summary: '',
+        confidenceScore: 20,
+        confidenceLevel: 'low'
+      };
     }
   }
 
@@ -174,7 +216,9 @@ Body: "${trimmedBody}"`;
         company: parsedData.company,
         role: parsedData.role,
         salary: parsedData.salary,
-        emailSnippet: parsedData.summary
+        emailSnippet: parsedData.summary,
+        confidenceScore: parsedData.confidenceScore,
+        confidenceLevel: parsedData.confidenceLevel || confidence
       };
     }
 
@@ -183,7 +227,7 @@ Body: "${trimmedBody}"`;
 
     return {
       label: labelConfig.name,
-      confidence,
+      confidence: extractedDetails.confidenceLevel || confidence,
       method,
       reason: extras.reason || `Classified by ${method}`,
       ...extras,
@@ -199,7 +243,7 @@ Body: "${trimmedBody}"`;
       const completion = await this.openai.chat.completions.create({
         model: OPENAI_MODEL,
         messages: [{ role: 'user', content: prompt }],
-        max_tokens: 10,
+        max_tokens: 300,
         temperature: OPENAI_TEMPERATURE
       });
 
@@ -224,9 +268,9 @@ Body: "${trimmedBody}"`;
     try {
       const response = await this.anthropic.messages.create({
         model: ANTHROPIC_MODEL,
-        max_tokens: 10,
+        max_tokens: 300,
         temperature: 0,
-        system: "You are an email classifier that only outputs one word category labels.",
+        system: "You are an email classifier that outputs JSON with category, confidence score, company, role, salary, and summary.",
         messages: [{ role: "user", content: prompt }]
       });
 
@@ -429,7 +473,8 @@ Body: "${trimmedBody}"`;
   }
 
   /**
-   * Main classification method
+   * Main classification method - AGGRESSIVE MODE
+   * All emails go through AI analysis for maximum accuracy
    */
   async classify(email) {
     if (!email || (!email.subject && !email.body)) {
@@ -443,155 +488,146 @@ Body: "${trimmedBody}"`;
     const cached = await cache.get(cacheKey);
     if (cached !== null) return cached;
 
-    // Skip finance/receipt emails
+    // ========== HARD FILTERS (Essential only) ==========
+    // Only skip emails that are DEFINITELY not job-related
+
+    // Skip finance/receipt emails (clear non-job emails)
     if (this.isFinanceReceipt(email)) {
+      console.log('⏭️  Skipping finance/receipt email');
+      await cache.set(cacheKey, null, 60 * 60 * 1000);
       return null;
     }
 
-    // Skip newsletters
-    if (this.isNewsletter(email)) {
-      console.log('⏭️  Skipping newsletter email');
-      return null;
-    }
-
-    // Skip LinkedIn reminders (not actual application confirmations)
-    if (this.isLinkedInReminder(email)) {
-      console.log('⏭️  Skipping LinkedIn reminder email');
-      return null;
-    }
-
-    // Skip job alert/discovery emails (not actual applications)
-    if (this.isLinkedInJobAlert(email)) {
-      console.log('⏭️  Skipping LinkedIn job alert email');
-      return null;
-    }
-
-    // Skip personal emails
+    // Skip personal emails (whitelist)
     const PERSONAL_SENDERS = ['mwang73151@aol.com'];
     if (PERSONAL_SENDERS.some(s => (email.from || '').toLowerCase().includes(s))) {
       console.log('⏭️  Skipping personal email');
+      await cache.set(cacheKey, null, 60 * 60 * 1000);
       return null;
     }
 
-    // Skip application reminders (verify account, complete application, etc.)
-    const REMINDER_PATTERNS = [
-      /verify your account to finalise your application/i,
-      /complete your application/i,
-      /finish your application/i,
-      /reminder:.*application/i,
-      /action required:.*application/i
-    ];
+    // ========== AI PRIMARY CLASSIFICATION ==========
+    const hasAI = this.useOpenAI || this.useGemini || this.useAnthropic;
 
+    if (!hasAI) {
+      console.warn('⚠ No AI available, falling back to rule-based classification');
+      return this.fallbackRuleBasedClassify(email, cache, cacheKey);
+    }
+
+    const prompt = this.buildPrompt(email);
+    let primaryResult = null;
+    let primaryModel = null;
+    const aiModelsUsed = [];
+
+    // Try Gemini first (fast & cheap)
+    if (this.useGemini) {
+      primaryResult = await this.classifyWithGemini(prompt);
+      primaryModel = 'gemini';
+      if (primaryResult) aiModelsUsed.push('gemini');
+    }
+
+    // Fallback to OpenAI if Gemini fails
+    if (!primaryResult && this.useOpenAI) {
+      primaryResult = await this.classifyWithOpenAI(prompt);
+      primaryModel = 'openai';
+      if (primaryResult) aiModelsUsed.push('openai');
+    }
+
+    // Fallback to Anthropic if both fail
+    if (!primaryResult && this.useAnthropic) {
+      primaryResult = await this.classifyWithAnthropic(prompt);
+      primaryModel = 'anthropic';
+      if (primaryResult) aiModelsUsed.push('anthropic');
+    }
+
+    // If all AI models failed, use fallback
+    if (!primaryResult) {
+      console.warn('⚠ All AI models failed, using fallback classification');
+      return this.fallbackRuleBasedClassify(email, cache, cacheKey);
+    }
+
+    // ========== MULTI-MODEL VALIDATION (Low Confidence) ==========
+    const confidenceScore = primaryResult.confidenceScore || 50;
+    let needsReview = false;
+    let secondaryResult = null;
+
+    // If confidence is low (< 70), validate with a second model
+    if (confidenceScore < 70) {
+      console.log(`⚠ Low confidence (${confidenceScore}), validating with second model...`);
+
+      // Choose a different model for validation
+      if (primaryModel === 'gemini' && this.useOpenAI) {
+        secondaryResult = await this.classifyWithOpenAI(prompt);
+        if (secondaryResult) aiModelsUsed.push('openai');
+      } else if (primaryModel === 'gemini' && this.useAnthropic) {
+        secondaryResult = await this.classifyWithAnthropic(prompt);
+        if (secondaryResult) aiModelsUsed.push('anthropic');
+      } else if (primaryModel === 'openai' && this.useAnthropic) {
+        secondaryResult = await this.classifyWithAnthropic(prompt);
+        if (secondaryResult) aiModelsUsed.push('anthropic');
+      } else if (primaryModel === 'openai' && this.useGemini) {
+        secondaryResult = await this.classifyWithGemini(prompt);
+        if (secondaryResult) aiModelsUsed.push('gemini');
+      } else if (primaryModel === 'anthropic' && this.useGemini) {
+        secondaryResult = await this.classifyWithGemini(prompt);
+        if (secondaryResult) aiModelsUsed.push('gemini');
+      }
+
+      // Check if models agree
+      if (secondaryResult && secondaryResult.label !== primaryResult.label) {
+        console.warn(`⚠ Models disagree: ${primaryModel}=${primaryResult.label} vs second=${secondaryResult.label}`);
+        needsReview = true;
+
+        // Use the result with higher confidence
+        if ((secondaryResult.confidenceScore || 50) > confidenceScore) {
+          console.log(`  → Using secondary result (higher confidence: ${secondaryResult.confidenceScore})`);
+          primaryResult = secondaryResult;
+        }
+      }
+    }
+
+    // Add metadata
+    primaryResult.aiModelsUsed = aiModelsUsed;
+    primaryResult.needsReview = needsReview;
+
+    // Cache and return
+    await cache.set(cacheKey, primaryResult);
+    return primaryResult;
+  }
+
+  /**
+   * Fallback rule-based classification when AI is unavailable
+   */
+  async fallbackRuleBasedClassify(email, cache, cacheKey) {
     const subject = (email.subject || '').toLowerCase();
     const body = (email.body || '').toLowerCase();
     const text = `${subject} ${body}`;
 
-    if (REMINDER_PATTERNS.some(p => p.test(text))) {
-      console.log('⏭️  Skipping application reminder email');
-      return null;
-    }
-
-    // Skip generic job discovery/alert emails
-    // subject, body, and text are already defined above or need to be reused
-    // We can reuse the 'text' variable from above or just use the existing variables if they are in scope.
-    // However, looking at the code structure, the previous block defined them.
-    // Let's just use the existing variables if they are available, or re-assign if needed.
-
-    // Actually, to avoid confusion and errors, I will just use the variables without redeclaring them.
-    // But since I can't see the full scope easily, I'll assume they might be redeclared in the block I just added.
-    // Wait, the previous block I added:
-    // const subject = ...
-    // const body = ...
-    // const text = ...
-
-    // And the block BELOW (which was existing code) ALSO has:
-    // const subject = ...
-    // const body = ...
-    // const text = ...
-
-    // So I need to remove the declarations in the block BELOW.
-
-    const JOB_ALERT_PATTERNS = [
-      /job alert/i,
-      /your job alert/i,
-      /jobs? for you/i,
-      /new jobs?/i,
-      /recommended jobs?/i,
-      /we found \d+ jobs?/i,
-      /\d+ new jobs?/i,
-      /job recommendations/i,
-      /daily job alert/i,
-      /weekly job alert/i
-    ];
-
-    if (JOB_ALERT_PATTERNS.some(pattern => pattern.test(text))) {
-      console.log('⏭️  Skipping job alert/discovery email');
-      return null;
-    }
-
+    // Check if outbound application
     if (this.isOutboundJobApplication(email)) {
-      return this.createResult('application', 'high', 'outbound-application');
+      const result = this.createResult('application', 'high', 'outbound-application');
+      await cache.set(cacheKey, result);
+      return result;
     }
 
-    // Phrase-based heuristics before AI (improves accuracy without cost)
-    const looksGenericContent = /\b(how to|guide|newsletter|daily update|tips|blog)\b/.test(subject);
-
+    // Phrase-based rules (priority order)
     const phraseRules = [
-      // 1. Offer (Highest Priority)
       { pattern: /(job offer|offer letter|offer details|accept (the )?offer|start date|compensation|onboarding)/, category: 'offer' },
-
-      // 2. Interview
       { pattern: /(interview|schedule d?an interview|availability for interview|invite(d)? you to interview)/, category: 'interview' },
-
-      // 3. Rejected (Explicit "not moving forward" overrides generic "application" subject)
       { pattern: /(reject|not (be |to )?moving forward|no longer moving forward|decline your application|will not be moving forward|unfortunately.*not)/, category: 'rejected' },
-
-      // 4. Application (Confirmation/generic updates - Lowest Priority heuristic)
       { pattern: /(application (was )?received|thank you for applying|we received your application)/, category: 'application' },
       { pattern: /(your application (to|for|as)|application to|application for)/, category: 'application' },
-      { pattern: /(application was viewed|viewed your application|application reviewed)/, category: 'application' },
-      { pattern: /thank you for including github in your job search/i, category: 'application' },
-      // Job discovery alerts - specific ones
-      { pattern: /(\bnew jobs? in\b)/, category: 'application' }
     ];
 
     for (const rule of phraseRules) {
       if (rule.pattern.test(text)) {
-        if (rule.category === 'offer' && looksGenericContent) {
-          // Skip weak offer when subject looks like generic content
-          continue;
-        }
-        return this.createResult(rule.category, 'high', 'rule-phrase');
+        const result = this.createResult(rule.category, 'medium', 'rule-phrase');
+        await cache.set(cacheKey, result);
+        return result;
       }
     }
 
-    // 3. AI Classification (fallback if no keyword match)
-    // 3. AI Classification (fallback if no keyword match)
-    if (this.enableAI) {
-      const prompt = this.buildPrompt(email);
-      let aiResult = null;
-
-      // Try Gemini first (fast & cheap)
-      if (this.useGemini) {
-        aiResult = await this.classifyWithGemini(prompt);
-      }
-
-      // Fallback to OpenAI
-      if (!aiResult && this.useOpenAI) {
-        aiResult = await this.classifyWithOpenAI(prompt);
-      }
-
-      // Fallback to Anthropic
-      if (!aiResult && this.useAnthropic) {
-        aiResult = await this.classifyWithAnthropic(prompt);
-      }
-
-      if (aiResult) {
-        await cache.set(cacheKey, aiResult);
-        return aiResult;
-      }
-    }
-
+    // No match - return null
     await cache.set(cacheKey, null, 60 * 60 * 1000);
     return null;
   }
