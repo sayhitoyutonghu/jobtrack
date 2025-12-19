@@ -13,7 +13,8 @@ class AutoManagerService {
       resolveSession: this.resolveSession.bind(this)
     });
     this.activeSessions = new Map();
-    this.autoStartEnabled = true;
+    // Default to false to pause auto-scan as requested
+    this.autoStartEnabled = false;
     this.refreshInterval = 30 * 60 * 1000; // 30分钟检查一次token
     this.refreshTimer = null;
   }
