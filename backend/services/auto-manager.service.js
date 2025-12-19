@@ -29,7 +29,7 @@ class AutoManagerService {
       // 检查token是否即将过期（提前5分钟刷新）
       const now = Date.now();
       const expiryTime = session.tokens.expiry_date;
-      
+
       if (expiryTime && (expiryTime - now) < 5 * 60 * 1000) {
         console.log(`[auto-manager] Token即将过期，自动刷新 session: ${sessionId}`);
         const refreshedSession = await this.refreshTokens(sessionId, session.tokens);
@@ -57,15 +57,15 @@ class AutoManagerService {
       );
 
       oauth2Client.setCredentials(tokens);
-      
+
       // 尝试刷新token
       const { credentials } = await oauth2Client.refreshAccessToken();
-      
+
       // 保存新的tokens
       saveSession(sessionId, credentials);
-      
+
       console.log(`[auto-manager] Token刷新成功 session: ${sessionId}`);
-      
+
       return {
         auth: oauth2Client,
         tokens: credentials,
@@ -73,14 +73,14 @@ class AutoManagerService {
       };
     } catch (error) {
       console.error(`[auto-manager] Token刷新失败 ${sessionId}:`, error.message);
-      
+
       // 如果刷新失败，删除无效的session
       if (error.message.includes('invalid_grant') || error.message.includes('invalid_token')) {
         console.log(`[auto-manager] 删除无效session: ${sessionId}`);
         deleteSession(sessionId);
         this.autoScanService.stop(sessionId);
       }
-      
+
       return null;
     }
   }
@@ -90,13 +90,13 @@ class AutoManagerService {
    */
   async start() {
     console.log('🚀 [auto-manager] 启动自动管理器...');
-    
+
     // 启动token刷新定时器
     this.startTokenRefreshTimer();
-    
+
     // 自动启动所有有效会话的扫描
     await this.autoStartAllSessions();
-    
+
     console.log('✅ [auto-manager] 自动管理器启动完成');
   }
 
@@ -107,11 +107,11 @@ class AutoManagerService {
     if (this.refreshTimer) {
       clearInterval(this.refreshTimer);
     }
-    
+
     this.refreshTimer = setInterval(async () => {
       await this.checkAndRefreshAllTokens();
     }, this.refreshInterval);
-    
+
     console.log(`[auto-manager] Token刷新定时器启动，间隔: ${this.refreshInterval / 1000 / 60}分钟`);
   }
 
@@ -121,14 +121,14 @@ class AutoManagerService {
   async checkAndRefreshAllTokens() {
     try {
       const allSessions = this.getAllStoredSessions();
-      
+
       for (const sessionId of allSessions) {
         const session = getSession(sessionId);
         if (!session) continue;
-        
+
         const now = Date.now();
         const expiryTime = session.tokens.expiry_date;
-        
+
         // 如果token在30分钟内过期，提前刷新
         if (expiryTime && (expiryTime - now) < 30 * 60 * 1000) {
           console.log(`[auto-manager] 预刷新token session: ${sessionId}`);
@@ -152,7 +152,7 @@ class AutoManagerService {
     try {
       const allSessions = this.getAllStoredSessions();
       console.log(`[auto-manager] 发现 ${allSessions.length} 个存储的会话`);
-      
+
       for (const sessionId of allSessions) {
         const session = await this.resolveSession(sessionId);
         if (session) {
@@ -164,7 +164,7 @@ class AutoManagerService {
           });
         }
       }
-      
+
       console.log(`[auto-manager] 自动启动了 ${this.activeSessions.size} 个会话的扫描`);
     } catch (error) {
       console.error('[auto-manager] 自动启动失败:', error.message);
@@ -179,9 +179,9 @@ class AutoManagerService {
       const fs = require('fs');
       const path = require('path');
       const storePath = path.join(__dirname, '..', 'data', 'sessions.json');
-      
+
       if (!fs.existsSync(storePath)) return [];
-      
+
       const data = JSON.parse(fs.readFileSync(storePath, 'utf8'));
       return Object.keys(data).filter(sessionId => {
         const session = data[sessionId];
@@ -200,7 +200,10 @@ class AutoManagerService {
     try {
       // 保存会话
       saveSession(sessionId, tokens);
-      
+
+      // 等待一小段时间确保session完全保存
+      await new Promise(resolve => setTimeout(resolve, 1000));
+
       // 自动启动扫描
       if (this.autoStartEnabled) {
         console.log(`[auto-manager] 新会话自动启动扫描: ${sessionId}`);
@@ -210,7 +213,7 @@ class AutoManagerService {
           autoStarted: true
         });
       }
-      
+
       return true;
     } catch (error) {
       console.error(`[auto-manager] 添加会话失败 ${sessionId}:`, error.message);
@@ -232,7 +235,7 @@ class AutoManagerService {
    */
   getAllSessionsStatus() {
     const sessions = [];
-    
+
     for (const [sessionId, info] of this.activeSessions) {
       const scanStatus = this.autoScanService.status(sessionId);
       sessions.push({
@@ -242,7 +245,7 @@ class AutoManagerService {
         startTime: info.startTime
       });
     }
-    
+
     return sessions;
   }
 
@@ -262,12 +265,12 @@ class AutoManagerService {
       clearInterval(this.refreshTimer);
       this.refreshTimer = null;
     }
-    
+
     // 停止所有扫描
     for (const sessionId of this.activeSessions.keys()) {
       this.autoScanService.stop(sessionId);
     }
-    
+
     this.activeSessions.clear();
     console.log('[auto-manager] 自动管理器已停止');
   }
