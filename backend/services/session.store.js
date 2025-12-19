@@ -21,8 +21,13 @@ function readAll() {
 }
 
 function writeAll(data) {
-  ensureStoreFile();
-  fs.writeFileSync(STORE_PATH, JSON.stringify(data, null, 2), 'utf8');
+  try {
+    ensureStoreFile();
+    // atomic write via temp file would be better but simple try/catch is a start
+    fs.writeFileSync(STORE_PATH, JSON.stringify(data, null, 2), 'utf8');
+  } catch (e) {
+    console.error('FATAL: Failed to write sessions.json:', e);
+  }
 }
 
 function saveSession(sessionId, tokens) {

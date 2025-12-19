@@ -181,6 +181,16 @@ router.get('/stream-scan', async (req, res) => {
     res.write(`data: ${JSON.stringify(data)}\n\n`);
   };
 
+  // Heartbeat to keep connection alive
+  const heartbeat = setInterval(() => {
+    res.write(': heartbeat\n\n');
+  }, 15000); // Send comment every 15s
+
+  // Cleanup on close
+  req.on('close', () => {
+    clearInterval(heartbeat);
+  });
+
   try {
     const maxResults = parseInt(req.query.maxResults) || 50;
     const query = req.query.query || 'is:unread';
@@ -352,8 +362,10 @@ router.get('/stream-scan', async (req, res) => {
 
   } catch (error) {
     console.error('Stream scan error:', error);
-    sendEvent('error', { message: error.message });
+    sendEvent('error', { message: error.message || 'Unknown scan error' });
     res.end();
+  } finally {
+    clearInterval(heartbeat);
   }
 });
 

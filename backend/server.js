@@ -459,3 +459,13 @@ app.listen(PORT, '0.0.0.0', async () => {
     console.error('❌ 自动管理器启动失败:', error.message);
   }
 });
+
+// Global Error Handlers to prevent crash
+process.on('uncaughtException', (err) => {
+  console.error('FATAL: Uncaught Exception:', err);
+  // Optional: Graceful shutdown logic here if needed, but keeping it alive for now to debug
+});
+
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('FATAL: Unhandled Rejection at:', promise, 'reason:', reason);
+});
