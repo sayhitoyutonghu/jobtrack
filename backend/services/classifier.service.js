@@ -62,7 +62,7 @@ class EmailClassifier {
       try {
         const { GoogleGenerativeAI } = require("@google/generative-ai");
         this.genAI = new GoogleGenerativeAI(geminiApiKey);
-        this.geminiModel = this.genAI.getGenerativeModel({ model: "gemini-pro" });
+        this.geminiModel = this.genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
         this.useGemini = true;
         console.log('✓ Gemini classification enabled');
       } catch (error) {
