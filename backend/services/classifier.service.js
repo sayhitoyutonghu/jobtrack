@@ -106,6 +106,7 @@ Categories:
   
 - interview: Interview invitation, scheduling, or confirmation
   ✅ Examples: "Schedule an interview", "Interview invitation", "Available for interview?"
+  ❌ NOT: "Read our interview with CEO", "Interview tips", "New interview podcast"
   
 - offer: Job offer or salary negotiation
   ✅ Examples: "Job offer", "Offer letter", "We'd like to extend an offer"
@@ -506,6 +507,13 @@ Body: "${trimmedBody}"`;
       return null;
     }
 
+    // Skip newsletter emails (clear non-job emails)
+    if (this.isNewsletter(email)) {
+      console.log('⏭️  Skipping newsletter email');
+      await cache.set(cacheKey, null, 60 * 60 * 1000);
+      return null;
+    }
+
     // ========== AI PRIMARY CLASSIFICATION ==========
     const hasAI = this.useOpenAI || this.useGemini || this.useAnthropic;
 
@@ -613,7 +621,8 @@ Body: "${trimmedBody}"`;
     // Phrase-based rules (priority order)
     const phraseRules = [
       { pattern: /(job offer|offer letter|offer details|accept (the )?offer|start date|compensation|onboarding)/, category: 'offer' },
-      { pattern: /(interview|schedule d?an interview|availability for interview|invite(d)? you to interview)/, category: 'interview' },
+      // Strict interview matching: must be an invitation or scheduling, NOT just the word "interview"
+      { pattern: /(schedule d?an interview|availability for interview|invite(d)? you to interview|interview invitation|interview request|virtual interview)/, category: 'interview' },
       { pattern: /(reject|not (be |to )?moving forward|no longer moving forward|decline your application|will not be moving forward|unfortunately.*not)/, category: 'rejected' },
       { pattern: /(application (was )?received|thank you for applying|we received your application)/, category: 'application' },
       { pattern: /(your application (to|for|as)|application to|application for)/, category: 'application' },
