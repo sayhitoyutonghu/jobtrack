@@ -108,6 +108,14 @@ const oauth2Client = new google.auth.OAuth2(
   process.env.GOOGLE_REDIRECT_URI
 );
 
+// Auto-refresh tokens when they expire
+oauth2Client.on('tokens', (tokens) => {
+  console.log('🔄 Tokens refreshed automatically');
+  if (tokens.refresh_token) {
+    console.log('✅ New refresh token received');
+  }
+});
+
 // ============================================
 // AUTH ROUTES
 // ============================================
@@ -145,6 +153,9 @@ app.get('/auth/callback', async (req, res) => {
     console.log('🔄 Exchanging code for tokens...');
     const { tokens } = await oauth2Client.getToken(code);
 
+    // New session id (declare early so it's available in token refresh callback)
+    const sessionId = Math.random().toString(36).substring(7);
+
     // Build user client
     const userAuth = new google.auth.OAuth2(
       process.env.GOOGLE_CLIENT_ID,
@@ -153,8 +164,19 @@ app.get('/auth/callback', async (req, res) => {
     );
     userAuth.setCredentials(tokens);
 
-    // New session id
-    const sessionId = Math.random().toString(36).substring(7);
+    // Auto-refresh tokens for this user
+    userAuth.on('tokens', (newTokens) => {
+      console.log(`🔄 Tokens auto-refreshed for session ${sessionId}`);
+      // Update stored tokens
+      const session = sessions.get(sessionId);
+      if (session) {
+        const updatedTokens = { ...session.tokens, ...newTokens };
+        session.tokens = updatedTokens;
+        session.auth.setCredentials(updatedTokens);
+        sessions.set(sessionId, session);
+        saveSession(sessionId, updatedTokens);
+      }
+    });
 
     // Store in memory
     sessions.set(sessionId, { auth: userAuth, tokens, createdAt: new Date() });
