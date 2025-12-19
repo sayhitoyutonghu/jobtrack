@@ -222,7 +222,8 @@ app.get('/auth/status', (req, res) => {
 // ============================================
 
 const requireAuth = (req, res, next) => {
-  const sessionId = req.headers['x-session-id'];
+  const sessionId = req.headers['x-session-id'] || req.query.sessionId || req.query.token;
+
   if (!sessionId) {
     return res.status(401).json({
       error: 'No session ID provided',
