@@ -101,7 +101,7 @@ class AutoScanService {
                   status: STATUS_MAP[cls.label] || 'Applied',
                   salary: cls.salary || 'Unknown',
                   location: cls.location || 'Unknown',
-                  date: new Date(email.internalDate),
+                  date: email.internalDate ? new Date(parseInt(email.internalDate)) : new Date(),
                   emailSnippet: cls.emailSnippet || email.snippet,
                   description: email.subject, // Keep description as subject for now, or use snippet
                   originalEmailId: email.id
@@ -289,7 +289,7 @@ class AutoScanService {
                 status: status,
                 salary: cls.salary || 'Unknown',
                 location: cls.location || 'Unknown',
-                date: new Date(email.internalDate),
+                date: email.internalDate ? new Date(parseInt(email.internalDate)) : new Date(),
                 emailSnippet: email.snippet,
                 description: email.subject,
                 originalEmailId: email.id

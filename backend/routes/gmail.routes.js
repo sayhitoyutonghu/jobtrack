@@ -327,7 +327,7 @@ router.post('/scan', async (req, res) => {
               status: STATUS_MAP[classification.label] || 'Applied',
               salary: classification.salary || 'Unknown',
               location: classification.location || 'Unknown',
-              date: new Date(email.internalDate),
+              date: email.internalDate ? new Date(parseInt(email.internalDate)) : new Date(),
               emailSnippet: classification.emailSnippet || email.snippet,
               description: email.subject,
               originalEmailId: email.id
