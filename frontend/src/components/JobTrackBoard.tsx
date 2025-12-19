@@ -926,7 +926,26 @@ export default function JobTrackBoard({ isAuthenticated }: JobTrackBoardProps) {
 
         // Build query based on configuration
         const sourceQuery = scanSource === 'inbox' ? 'in:inbox' : 'is:unread';
-        const query = `${sourceQuery} newer_than:${dateRange}`;
+        let query = `${sourceQuery} newer_than:${dateRange}`;
+
+        // Handle monthly scan range (e.g., month_2025_12)
+        if (dateRange && dateRange.startsWith('month_')) {
+            try {
+                const [_, yearStr, monthStr] = dateRange.split('_');
+                const year = parseInt(yearStr);
+                const month = parseInt(monthStr);
+
+                // Calculate start date (1st of month)
+                const startDate = new Date(year, month - 1, 1);
+                // Calculate end date (1st of next month)
+                const endDate = new Date(year, month, 1);
+
+                const format = (d: Date) => `${d.getFullYear()}/${d.getMonth() + 1}/${d.getDate()}`;
+                query = `${sourceQuery} after:${format(startDate)} before:${format(endDate)}`;
+            } catch (e) {
+                console.error("Failed to parse month date range:", dateRange);
+            }
+        }
 
         let scanSuccess = false;
         let scanError = null;

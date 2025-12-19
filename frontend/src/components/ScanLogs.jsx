@@ -199,6 +199,16 @@ const ScanLogs = () => {
                                 <option value="30d">📅 Last 30 days</option>
                                 <option value="60d">📅 Last 60 days</option>
                                 <option value="365d">📅 Last 365 days</option>
+                                <option disabled>──────────────</option>
+                                {Array.from({ length: 12 }, (_, i) => {
+                                    const d = new Date();
+                                    d.setMonth(d.getMonth() - i);
+                                    const year = d.getFullYear();
+                                    const month = d.getMonth() + 1;
+                                    const value = `month_${year}_${month}`;
+                                    const label = d.toLocaleString('en-US', { month: 'long', year: 'numeric' });
+                                    return <option key={value} value={value}>📅 {label}</option>;
+                                })}
                             </select>
                         </div>
 
