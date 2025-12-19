@@ -198,6 +198,7 @@ const ScanLogs = () => {
                                 <option value="14d">📅 Last 14 days</option>
                                 <option value="30d">📅 Last 30 days</option>
                                 <option value="60d">📅 Last 60 days</option>
+                                <option value="365d">📅 Last 365 days</option>
                             </select>
                         </div>
 
@@ -209,7 +210,7 @@ const ScanLogs = () => {
                             <input
                                 type="number"
                                 min="10"
-                                max="500"
+                                max="2000"
                                 step="10"
                                 value={tempMaxResults}
                                 onChange={(e) => setTempMaxResults(parseInt(e.target.value, 10))}
@@ -325,8 +326,8 @@ const ScanLogs = () => {
                                                     <div
                                                         key={idx}
                                                         className={`p-3 border-2 text-xs font-mono ${email.isJobEmail
-                                                                ? 'bg-green-50 border-green-600'
-                                                                : 'bg-zinc-50 border-zinc-300'
+                                                            ? 'bg-green-50 border-green-600'
+                                                            : 'bg-zinc-50 border-zinc-300'
                                                             }`}
                                                     >
                                                         <div className="flex items-start justify-between gap-2 mb-2">
@@ -337,8 +338,8 @@ const ScanLogs = () => {
                                                                 </div>
                                                             </div>
                                                             <div className={`shrink-0 px-2 py-1 text-[10px] font-bold border ${email.isJobEmail
-                                                                    ? 'bg-green-600 text-white border-green-700'
-                                                                    : 'bg-zinc-400 text-white border-zinc-500'
+                                                                ? 'bg-green-600 text-white border-green-700'
+                                                                : 'bg-zinc-400 text-white border-zinc-500'
                                                                 }`}>
                                                                 {email.isJobEmail ? '✅ JOB' : '❌ OTHER'}
                                                             </div>
