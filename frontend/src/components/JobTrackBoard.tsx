@@ -29,6 +29,7 @@ import { GripVertical } from "lucide-react";
 import { gmailApi, authApi, jobsApi } from "../api/client.js";
 import WelcomeCard from "./WelcomeCard";
 import { MOCK_JOBS } from "../data/mockJobs";
+import { LogTerminal } from "./LogTerminal";
 
 // --- Utility: 合并 Tailwind 类名 ---
 function cn(...inputs: ClassValue[]) {
@@ -795,6 +796,9 @@ export default function JobTrackBoard({ isAuthenticated }: JobTrackBoardProps) {
     const [isScanning, setIsScanning] = useState(false);
     const [scanMessage, setScanMessage] = useState<string | null>(null);
     const [lastScanTime, setLastScanTime] = useState<Date | null>(null);
+    const [isDemoMode, setIsDemoMode] = useState(false);
+
+    // Scan Configuration State
     const [maxResults, setMaxResults] = useState<number>(() => {
         const saved = localStorage.getItem('scan_max_results');
         return saved ? parseInt(saved, 10) : 50;
@@ -807,7 +811,12 @@ export default function JobTrackBoard({ isAuthenticated }: JobTrackBoardProps) {
         const saved = localStorage.getItem('scan_date_range');
         return saved || '7d';
     });
-    const [isDemoMode, setIsDemoMode] = useState(false);
+
+    // Real-time Scan Logs State
+    const [showLogTerminal, setShowLogTerminal] = useState(false);
+    const [scanLogs, setScanLogs] = useState<any[]>([]);
+    const [scanProgress, setScanProgress] = useState(0);
+    const [scanStatus, setScanStatus] = useState("Idle");
 
 
     // Listen for scan config updates from ScanLogs
@@ -934,12 +943,8 @@ export default function JobTrackBoard({ isAuthenticated }: JobTrackBoardProps) {
                 const [_, yearStr, monthStr] = dateRange.split('_');
                 const year = parseInt(yearStr);
                 const month = parseInt(monthStr);
-
-                // Calculate start date (1st of month)
                 const startDate = new Date(year, month - 1, 1);
-                // Calculate end date (1st of next month)
                 const endDate = new Date(year, month, 1);
-
                 const format = (d: Date) => `${d.getFullYear()}/${d.getMonth() + 1}/${d.getDate()}`;
                 query = `${sourceQuery} after:${format(startDate)} before:${format(endDate)}`;
             } catch (e) {
@@ -947,164 +952,117 @@ export default function JobTrackBoard({ isAuthenticated }: JobTrackBoardProps) {
             }
         }
 
+        // @ts-ignore
+        const backendUrl = import.meta.env.VITE_BACKEND_URL; // Using Vite env var if available, else fallback
+        const baseUrl = backendUrl || 'http://localhost:8080';
+        const url = `${baseUrl}/api/gmail/stream-scan?query=${encodeURIComponent(query)}&maxResults=${maxResults}&sessionId=${sessionId}`;
+
+        const eventSource = new EventSource(url);
         let scanSuccess = false;
-        let scanError = null;
         let emailsScanned = 0;
         let emailsFound = 0;
-        let processedEmails: Job[] = [];
-        let allScannedEmails: any[] = [];
+        const newJobsFound: Job[] = [];
 
-        try {
-            const sessionId = localStorage.getItem('session_id');
-            if (!sessionId) {
-                scanError = "Please sign in with Google first";
-                setScanMessage("⚠️ " + scanError);
-                setTimeout(() => setScanMessage(null), 3000);
-                setIsScanning(false);
-                return;
-            }
+        eventSource.onopen = () => {
+            setScanStatus("Connected to stream...");
+        };
 
-            // Use gmailApi which handles authentication headers automatically
-            const data = await gmailApi.scanEmails({
-                maxResults: maxResults,
-                query: query
-            });
+        eventSource.addEventListener('log', (e: any) => {
+            const data = JSON.parse(e.data);
+            setScanLogs(prev => [...prev, { type: 'log', text: data.message, timestamp: new Date().toLocaleTimeString() }]);
+        });
 
+        eventSource.addEventListener('progress', (e: any) => {
+            const data = JSON.parse(e.data);
+            setScanProgress(data.percent);
 
-            function mapLabelToStatus(label: string): Status {
-                if (!label) return 'Applied';
-                const l = label.toLowerCase();
-                if (l.includes('interview')) return 'Interviewing';
-                if (l.includes('offer')) return 'Offer';
-                if (l.includes('reject')) return 'Rejected';
-                return 'Applied';
-            }
+            if (data.type === 'match' && data.job) {
+                const jobData = data.job;
+                const newJob: Job = {
+                    id: jobData.id,
+                    company: jobData.company || "Unknown",
+                    role: jobData.role || "Unknown",
+                    salary: jobData.salary || "Unknown",
+                    status: mapLabelToStatus(jobData.label),
+                    location: "Remote",
+                    description: jobData.subject,
+                    date: new Date().toISOString().split('T')[0],
+                    emailSnippet: jobData.subject
+                };
 
-            function extractLocation(subject: string, body: string): string {
-                // ... logic or default ...
-                return "Remote"; // Simplified for now since implementation was missing or assumed
-            }
+                newJobsFound.push(newJob);
+                setScanLogs(prev => [...prev, { type: 'success', text: data.log || `Found: ${newJob.company}`, timestamp: new Date().toLocaleTimeString() }]);
 
-            // ... existing code ...
-
-            if (data.success && data.results) {
-                console.log('[handleScan] Raw results:', data.results);
-                emailsScanned = data.results.length;
-
-                // Process ALL emails and add classification info
-                allScannedEmails = data.results.map((r: any) => ({
-                    id: r.id,
-                    subject: r.subject || "No subject",
-                    from: r.from || "Unknown",
-                    date: r.date || new Date().toISOString(),
-                    isJobEmail: !r.skipped && !!r.label,
-                    classification: r.label || "not_classified",
-                    skipped: r.skipped || false
-                }));
-
-                // Extract only job emails for the board
-                const newJobs = data.results
-                    .filter((r: any) => !r.skipped && r.label)
-                    .map((r: any) => ({
-                        id: r.id,
-                        company: extractCompany(r.subject || "", r.from || ""),
-                        role: extractRole(r.subject || ""),
-                        salary: "Unknown",
-                        status: mapLabelToStatus(r.label),
-                        location: "Remote", // Simplified
-                        description: r.subject,
-                        date: new Date().toISOString().split('T')[0],
-                        emailSnippet: r.subject || "No subject"
-                    }));
-
-                console.log('[handleScan] Mapped newJobs:', newJobs);
-
-                emailsFound = newJobs.length;
-                processedEmails = newJobs;
-                // ...
-
-
+                // Optimistically update board immediately as they stream in
                 setJobs(prevJobs => {
-                    const existingIds = new Set(prevJobs.map(j => j.id));
-                    const uniqueNewJobs = newJobs.filter((j: Job) => !existingIds.has(j.id));
-
-                    // Merge with saved jobs using ref to avoid dependency
-                    const currentSavedJobs = savedJobsRef.current;
-                    const mergedJobs = [...prevJobs, ...uniqueNewJobs].map(job => {
-                        return currentSavedJobs[job.id] ? { ...job, ...currentSavedJobs[job.id] } : job;
-                    });
-
-                    return mergedJobs;
+                    const exists = prevJobs.some(j => j.id === newJob.id);
+                    if (exists) return prevJobs.map(j => j.id === newJob.id ? { ...j, ...newJob } : j);
+                    return [...prevJobs, newJob];
                 });
-
-                setLastScanTime(new Date());
-                scanSuccess = true;
-                setScanMessage(`✓ Found ${newJobs.length} job email${newJobs.length !== 1 ? 's' : ''}!`);
-                setTimeout(() => setScanMessage(null), 5000);
-            } else {
-                scanSuccess = true;
-                setScanMessage("No new emails found");
-                setTimeout(() => setScanMessage(null), 3000);
+            } else if (data.type === 'skipped') {
+                // Optional: log skips if verbose
+                // setScanLogs(prev => [...prev, { type: 'log', text: `Skipped: ${data.reason}`, timestamp: new Date().toLocaleTimeString() }]);
             }
+        });
 
-            // Refresh jobs from DB to get latest state (including any newly scanned ones)
-            const dbJobs = await jobsApi.getAll();
-            if (dbJobs.success && dbJobs.jobs) {
-                setJobs(dbJobs.jobs);
-            }
+        eventSource.addEventListener('complete', (e: any) => {
+            const data = JSON.parse(e.data);
+            scanSuccess = true;
+            emailsScanned = data.stats.total;
+            emailsFound = data.stats.processed;
 
-        } catch (e: any) {
-            console.error("Scan failed", e);
-            scanError = e.message || "Network error";
-            if (e.response?.status === 401) {
-                scanError = "Session expired - please sign in again";
-                setScanMessage("⚠️ " + scanError);
-                localStorage.removeItem('session_id');
-            } else {
-                setScanMessage("❌ Scan failed - " + scanError);
-            }
-            setTimeout(() => setScanMessage(null), 3000);
-        } finally {
+            setScanStatus("Scan Complete");
+            setScanProgress(100);
+            setScanLogs(prev => [...prev, { type: 'success', text: `Done! Found ${emailsFound} relevant emails out of ${emailsScanned}.`, timestamp: new Date().toLocaleTimeString() }]);
+
+            eventSource.close();
             setIsScanning(false);
 
-            // Emit scan event for logging
-            const eventDetail = {
-                success: scanSuccess,
-                emailsScanned: emailsScanned,
-                emailsFound: emailsFound,
-                query: query,
-                scanSource: scanSource,
-                dateRange: dateRange,
-                error: scanError,
-                allEmails: allScannedEmails,
-                jobEmails: processedEmails
-            };
+            if (emailsFound > 0) {
+                setScanMessage(`✓ Found ${emailsFound} new jobs!`);
+                setTimeout(() => setScanMessage(null), 5000);
+            } else {
+                setScanMessage("No new relevant emails found.");
+                setTimeout(() => setScanMessage(null), 3000);
+            }
 
-            console.log('[JobTrackBoard] Dispatching scanComplete event:', eventDetail);
-            window.dispatchEvent(new CustomEvent('scanComplete', {
-                detail: eventDetail
-            }));
-        }
+            // Sync with DB
+            jobsApi.getAll().then((res) => {
+                if (res.success && res.jobs) setJobs(res.jobs);
+            });
+        });
+
+        eventSource.addEventListener('error', (e: any) => {
+            // SSE error event is generic, need to parse if data exists, otherwise it might be network error
+            let msg = "Connection error";
+            try {
+                const data = JSON.parse(e.data);
+                msg = data.message;
+            } catch (err) { }
+
+            console.error("EventSource error:", e);
+            setScanLogs(prev => [...prev, { type: 'error', text: `Error: ${msg}`, timestamp: new Date().toLocaleTimeString() }]);
+            eventSource.close();
+            setIsScanning(false);
+            setScanMessage("❌ Scan failed");
+        });
+
+        // Safety timeout
+        setTimeout(() => {
+            if (eventSource.readyState !== EventSource.CLOSED) {
+                console.warn("Force closing stream after timeout");
+                eventSource.close();
+                setIsScanning(false);
+            }
+        }, 300000); // 5 min timeout
     };
 
     useEffect(() => {
         async function fetchJobs() {
             try {
-                // If not authenticated, clear jobs (unless demo mode handles it elsewhere, but authenticated empty state relies on empty jobs)
-                if (!isAuthenticated) {
-                    // console.log("Not authenticated, skipping DB fetch");
-                    // We don't clear jobs here because Demo mode might be active?
-                    // Actually, Demo mode sets jobs via handleStartDemo.
-                    // If we just logged out, we might want to clear.
-                    // But if we are guest, we show empty or demo prompts.
-                    return;
-                }
-
+                if (!isAuthenticated) return;
                 setIsLoading(true);
-
-                // Fetch saved jobs from DB
                 const data = await jobsApi.getAll();
-
                 if (data.success && data.jobs) {
                     setJobs(data.jobs);
                 } else {
@@ -1117,9 +1075,8 @@ export default function JobTrackBoard({ isAuthenticated }: JobTrackBoardProps) {
                 setIsLoading(false);
             }
         }
-
         fetchJobs();
-    }, [isAuthenticated]); // Re-run when auth status changes
+    }, [isAuthenticated]);
 
     const columns = useMemo(() => {
         const cols = new Map<Status, Job[]>();
@@ -1272,7 +1229,7 @@ export default function JobTrackBoard({ isAuthenticated }: JobTrackBoardProps) {
     }
 
     return (
-        <div className="h-full w-full bg-zinc-50 text-black font-mono p-4 md:p-8 flex flex-col overflow-hidden">
+        <div className="h-full w-full bg-zinc-50 text-black font-mono p-4 md:p-8 flex flex-col overflow-hidden relative">
             {/* Page Header */}
             <header className="mb-6 border-b-4 border-black pb-4 flex flex-col md:flex-row justify-between items-start md:items-end gap-4 shrink-0">
                 <div>
@@ -1325,10 +1282,7 @@ export default function JobTrackBoard({ isAuthenticated }: JobTrackBoardProps) {
                                     jobs={jobs.filter((job) => job.status === col.id)}
                                     onJobClick={setSelectedJob}
                                     onPlaceholderClick={() => {
-                                        if (col.id === 'Applied') {
-                                            setIsScanning(true);
-                                            // Trigger scan logic here...
-                                        }
+                                        if (col.id === 'Applied') handleScan();
                                     }}
                                     showWelcomeCard={jobs.length === 0}
                                     onStartDemo={handleStartDemo}
@@ -1368,6 +1322,16 @@ export default function JobTrackBoard({ isAuthenticated }: JobTrackBoardProps) {
                     {scanMessage}
                 </div>
             )}
+
+            {showLogTerminal && (
+                <LogTerminal
+                    onClose={() => setShowLogTerminal(false)}
+                    logs={scanLogs}
+                    progress={scanProgress}
+                    status={scanStatus}
+                />
+            )}
         </div>
+
     );
 }

@@ -165,6 +165,198 @@ router.post('/analyze-email', async (req, res) => {
  * POST /api/gmail/scan
  * Scans and labels new emails
  */
+/**
+ * GET /api/gmail/stream-scan
+ * Scans emails and streams results via Server-Sent Events (SSE)
+ */
+router.get('/stream-scan', async (req, res) => {
+  // SSE Setup
+  res.setHeader('Content-Type', 'text/event-stream');
+  res.setHeader('Cache-Control', 'no-cache');
+  res.setHeader('Connection', 'keep-alive');
+  res.setHeader('Access-Control-Allow-Origin', '*');
+
+  const sendEvent = (type, data) => {
+    res.write(`event: ${type}\n`);
+    res.write(`data: ${JSON.stringify(data)}\n\n`);
+  };
+
+  try {
+    const maxResults = parseInt(req.query.maxResults) || 50;
+    const query = req.query.query || 'is:unread';
+    const sessionId = req.headers['x-session-id'] || req.query.sessionId;
+
+    // Resolve session manually if needed since this is a GET request which might bypass middleware if not carefully configured
+    // But since we use app.use('/api/gmail', requireAuth...), req.user should be populated
+
+    if (!req.user || !req.user.auth) {
+      sendEvent('error', { message: 'Authentication required' });
+      return res.end();
+    }
+
+    const gmailService = new GmailService(req.user.auth);
+    const customClassifier = new CustomLabelClassifier();
+    const PersistentCache = require('../services/persistent-cache.service');
+    const path = require('path');
+    const seenCache = new PersistentCache({
+      filePath: path.join(__dirname, '../data/cache-seen.json'),
+      defaultTtlMs: 30 * 24 * 60 * 60 * 1000
+    });
+    const ClassifierService = require('../services/classifier.service');
+    const Job = require('../models/Job');
+
+    sendEvent('log', { message: `🔍 Starting scan for "${query}" (limit: ${maxResults})...` });
+
+    // Step 1: Fetch IDs
+    const messages = await gmailService.scanNewEmails(query, maxResults);
+    sendEvent('log', { message: `📨 Found ${messages.length} potentially relevant emails.` });
+
+    if (messages.length === 0) {
+      sendEvent('complete', { stats: { total: 0, processed: 0, skipped: 0 } });
+      return res.end();
+    }
+
+    let stats = { total: messages.length, processed: 0, skipped: 0 };
+    const processedResults = [];
+
+    // Step 2: Process each email
+    for (const [index, message] of messages.entries()) {
+      const progress = Math.round(((index + 1) / messages.length) * 100);
+
+      try {
+        // Check cache first
+        const seen = await seenCache.get(message.id);
+        if (seen) {
+          stats.skipped++;
+          sendEvent('progress', {
+            percent: progress,
+            type: 'skipped',
+            reason: 'Already Seen',
+            id: message.id
+          });
+          continue;
+        }
+
+        const email = await gmailService.getEmail(message.id);
+        if (!email.body || email.body.length === 0) {
+          stats.skipped++;
+          sendEvent('progress', { percent: progress, type: 'skipped', reason: 'Empty Body', subject: email.subject });
+          continue;
+        }
+
+        sendEvent('log', { message: `🧠 Analyzing: "${email.subject}"...` });
+
+        // 1. Custom Classifier
+        const customResult = await customClassifier.classify(email);
+        if (customResult && customResult.success) {
+          await gmailService.applyLabelToThread(email.threadId, customResult.label, false);
+          stats.processed++;
+          const resultData = {
+            id: email.id,
+            subject: email.subject,
+            label: customResult.label,
+            company: "Custom Rule",
+            role: "N/A",
+            status: 'Applied'
+          };
+          processedResults.push(resultData);
+          sendEvent('progress', { percent: progress, type: 'match', job: resultData });
+          await seenCache.set(message.id, { labeled: customResult.label, at: Date.now() });
+          continue;
+        }
+
+        // 2. Simple Job Check
+        const clfNoAI = new ClassifierService({ enableAI: false });
+        if (!clfNoAI.isJobRelated(email)) {
+          const reason = clfNoAI.isFinanceReceipt && clfNoAI.isFinanceReceipt(email) ? 'Receipt' : 'Not Job Related';
+          stats.skipped++;
+          sendEvent('progress', { percent: progress, type: 'skipped', reason: reason, subject: email.subject });
+          await seenCache.set(message.id, { skipped: reason, at: Date.now() });
+          continue;
+        }
+
+        // 3. AI Classifier
+        const classifier = new ClassifierService({
+          enableAI: true,
+          openaiApiKey: process.env.OPENAI_API_KEY,
+          anthropicApiKey: process.env.ANTHROPIC_API_KEY,
+          geminiApiKey: process.env.GEMINI_API_KEY
+        });
+
+        const classification = await classifier.classify(email);
+
+        if (!classification) {
+          stats.skipped++;
+          sendEvent('progress', { percent: progress, type: 'skipped', reason: 'AI No Match', subject: email.subject });
+          await seenCache.set(message.id, { skipped: 'no-match', at: Date.now() });
+        } else {
+          // Success!
+          await gmailService.applyLabelToThread(email.threadId, classification.label, classification.config.moveToFolder);
+
+          // Save DB
+          const STATUS_MAP = {
+            'Application': 'Applied', 'Interview': 'Interviewing',
+            'Offer': 'Offer', 'Rejected': 'Rejected', 'Ghost': 'Rejected'
+          };
+
+          // ... DB Saving Logic ...
+          const userEmail = await gmailService.getUserEmail();
+
+          const savedJob = await Job.findOneAndUpdate(
+            { originalEmailId: email.id },
+            {
+              userId: userEmail,
+              company: classification.company || 'Unknown',
+              role: classification.role || 'Unknown',
+              status: STATUS_MAP[classification.label] || 'Applied',
+              salary: classification.salary || 'Unknown',
+              emailSnippet: classification.emailSnippet,
+              date: new Date(),
+              originalEmailId: email.id,
+              description: email.subject
+            },
+            { upsert: true, new: true }
+          );
+
+          stats.processed++;
+          const jobData = {
+            id: savedJob.id,
+            company: savedJob.company,
+            role: savedJob.role,
+            status: savedJob.status,
+            salary: savedJob.salary
+          };
+          processedResults.push(jobData);
+
+          sendEvent('progress', {
+            percent: progress,
+            type: 'match',
+            job: jobData,
+            log: `✅ Classified as ${classification.label}: ${classification.company} - ${classification.role}`
+          });
+
+          await seenCache.set(message.id, { labeled: classification.label, at: Date.now() });
+        }
+
+        // Rate limit slightly
+        await new Promise(r => setTimeout(r, 100));
+
+      } catch (err) {
+        console.error(`Error processing ${message.id}:`, err);
+        sendEvent('log', { message: `❌ Error: ${err.message}` });
+      }
+    }
+
+    sendEvent('complete', { stats, results: processedResults });
+    res.end();
+
+  } catch (error) {
+    console.error('Stream scan error:', error);
+    sendEvent('error', { message: error.message });
+    res.end();
+  }
+});
+
 router.post('/scan', async (req, res) => {
   try {
     const { maxResults = 50, query = 'is:unread' } = req.body;
