@@ -311,7 +311,7 @@ router.get('/stream-scan', async (req, res) => {
               status: STATUS_MAP[classification.label] || 'Applied',
               salary: classification.salary || 'Unknown',
               emailSnippet: classification.emailSnippet,
-              date: new Date(),
+              date: email.internalDate ? new Date(parseInt(email.internalDate)) : new Date(),
               originalEmailId: email.id,
               description: email.subject
             },
