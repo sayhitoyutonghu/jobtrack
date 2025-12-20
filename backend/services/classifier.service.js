@@ -27,11 +27,12 @@ class EmailClassifier {
   constructor(options = {}) {
     this.useOpenAI = false;
     this.useAnthropic = false;
-    this.useAnthropic = false;
+    this.useGemini = false;
 
     const {
       openaiApiKey = process.env.OPENAI_API_KEY,
       anthropicApiKey = process.env.ANTHROPIC_API_KEY,
+      geminiApiKey = process.env.GEMINI_API_KEY,
       enableAI = true
     } = options;
 
@@ -46,6 +47,18 @@ class EmailClassifier {
       }
     }
 
+    if (enableAI && geminiApiKey && geminiApiKey !== 'your-gemini-key') {
+      try {
+        const { GoogleGenerativeAI } = require("@google/generative-ai");
+        this.genAI = new GoogleGenerativeAI(geminiApiKey);
+        this.geminiModel = this.genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+        this.useGemini = true;
+        console.log('✓ Gemini classification enabled');
+      } catch (error) {
+        console.error('⚠ Failed to initialize Gemini SDK:', error.message);
+      }
+    }
+
     if (enableAI && !this.useOpenAI && anthropicApiKey && anthropicApiKey !== 'sk-ant-your-key-here') {
       try {
         const Anthropic = require('@anthropic-ai/sdk');
@@ -57,11 +70,9 @@ class EmailClassifier {
       }
     }
 
-
-
     // Only log if we EXPECTED AI to be enabled/it was requested but failed
     // If the instance was created with enableAI: false (e.g. detailed scan), don't log warning.
-    if (this.enableAI && !this.useOpenAI && !this.useAnthropic) {
+    if (this.enableAI && !this.useOpenAI && !this.useAnthropic && !this.useGemini) {
       console.log('⚠ AI disabled (no valid API key provided)');
     }
   }
@@ -236,7 +247,8 @@ Body: "${trimmedBody}"`;
         model: OPENAI_MODEL,
         messages: [{ role: 'user', content: prompt }],
         max_tokens: 300,
-        temperature: OPENAI_TEMPERATURE
+        temperature: OPENAI_TEMPERATURE,
+        response_format: { type: "json_object" }
       });
 
       const category = this.parseCategory(completion.choices[0]?.message?.content);
@@ -286,6 +298,29 @@ Body: "${trimmedBody}"`;
   }
 
 
+  async classifyWithGemini(prompt) {
+    if (!this.useGemini) return null;
+
+    console.log('[AI] Calling Gemini...');
+    try {
+      const result = await this.geminiModel.generateContent(prompt);
+      const response = await result.response;
+      const text = response.text();
+
+      const category = this.parseCategory(text);
+      if (!category) {
+        console.warn('[classifier][gemini] Invalid category:', text);
+        return null;
+      }
+
+      return this.createResult(category, 'medium', 'gemini-ai', {
+        rawResponse: text
+      });
+    } catch (error) {
+      console.error('Gemini classification failed:', error.message);
+      return null;
+    }
+  }
 
   /**
    * Check if this is a LinkedIn Job Alert email
@@ -484,8 +519,8 @@ Body: "${trimmedBody}"`;
       return null;
     }
 
-    // ========== AI PRIMARY CLASSIFICATION ==========
-    const hasAI = this.useOpenAI || this.useAnthropic;
+    // ========== AI PRIMARY CLASSIFICATION with FALLBACK ==========
+    const hasAI = this.useOpenAI || this.useGemini || this.useAnthropic;
 
     if (!hasAI) {
       console.warn('⚠ No AI available, falling back to rule-based classification');
@@ -497,18 +532,35 @@ Body: "${trimmedBody}"`;
     let primaryModel = null;
     const aiModelsUsed = [];
 
-    // Use OpenAI
+    // Step 1: Try OpenAI (Primary)
     if (this.useOpenAI) {
+      console.log('[AI] Classifying with OpenAI (Primary)...');
       primaryResult = await this.classifyWithOpenAI(prompt);
-      primaryModel = 'openai';
-      if (primaryResult) aiModelsUsed.push('openai');
+      if (primaryResult) {
+        primaryModel = 'openai';
+        aiModelsUsed.push('openai');
+      } else {
+        console.log('⚠️ OpenAI failed or returned null, switching to Gemini...');
+      }
     }
 
-    // Fallback to Anthropic if both fail
+    // Step 2: Try Gemini (Fallback)
+    if (!primaryResult && this.useGemini) {
+      console.log('[AI] Calling Gemini (Fallback)...');
+      primaryResult = await this.classifyWithGemini(prompt);
+      if (primaryResult) {
+        primaryModel = 'gemini';
+        aiModelsUsed.push('gemini');
+      }
+    }
+
+    // Step 3: Try Anthropic (Last Resort)
     if (!primaryResult && this.useAnthropic) {
       primaryResult = await this.classifyWithAnthropic(prompt);
-      primaryModel = 'anthropic';
-      if (primaryResult) aiModelsUsed.push('anthropic');
+      if (primaryResult) {
+        primaryModel = 'anthropic';
+        aiModelsUsed.push('anthropic');
+      }
     }
 
     // If all AI models failed, use fallback
@@ -517,37 +569,20 @@ Body: "${trimmedBody}"`;
       return this.fallbackRuleBasedClassify(email, cache, cacheKey);
     }
 
-    // ========== MULTI-MODEL VALIDATION (Low Confidence) ==========
-    const confidenceScore = primaryResult.confidenceScore || 50;
-    let needsReview = false;
-    let secondaryResult = null;
-
-    // If confidence is low (< 70), validate with a second model
-    if (confidenceScore < 70) {
-      console.log(`⚠ Low confidence(${confidenceScore}), validating with second model...`);
-
-      // Choose a different model for validation
-      if (primaryModel === 'openai' && this.useAnthropic) {
-        secondaryResult = await this.classifyWithAnthropic(prompt);
-        if (secondaryResult) aiModelsUsed.push('anthropic');
-      }
-
-      // Check if models agree
-      if (secondaryResult && secondaryResult.label !== primaryResult.label) {
-        console.warn(`⚠ Models disagree: ${primaryModel}=${primaryResult.label} vs second = ${secondaryResult.label} `);
-        needsReview = true;
-
-        // Use the result with higher confidence
-        if ((secondaryResult.confidenceScore || 50) > confidenceScore) {
-          console.log(`  → Using secondary result(higher confidence: ${secondaryResult.confidenceScore})`);
-          primaryResult = secondaryResult;
-        }
+    // Ghost Job / Invalid Data Check
+    // If we have a result but strictly missing Company or Role, reject it.
+    // This allows the caller to treat it as "skipped" rather than saving "Unknown" data.
+    if (!primaryResult.company || primaryResult.company === 'Unknown' ||
+      !primaryResult.role || primaryResult.role === 'Unknown') {
+      if (primaryResult.label !== 'Rejected') { // Allow "Rejected" emails to be vague
+        console.warn(`👻 [Ghost Job] Skipped due to missing data (Company: ${primaryResult.company}, Role: ${primaryResult.role})`);
+        return null;
       }
     }
 
     // Add metadata
     primaryResult.aiModelsUsed = aiModelsUsed;
-    primaryResult.needsReview = needsReview;
+    primaryResult.needsReview = false; // Simplified
 
     // Cache and return
     await cache.set(cacheKey, primaryResult);
