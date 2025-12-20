@@ -102,7 +102,7 @@ class AutoScanService {
               };
 
               await Job.findOneAndUpdate(
-                { originalEmailId: email.id },
+                { emailId: email.id },
                 {
                   userId: userEmail,
                   company: cls.company || 'Unknown Company',
@@ -113,7 +113,7 @@ class AutoScanService {
                   date: email.internalDate ? new Date(parseInt(email.internalDate)) : new Date(),
                   emailSnippet: cls.emailSnippet || email.snippet,
                   description: email.subject, // Keep description as subject for now, or use snippet
-                  originalEmailId: email.id
+                  emailId: email.id
                 },
                 { upsert: true, new: true }
               );
@@ -306,7 +306,7 @@ class AutoScanService {
             else if (cls.label === 'Rejected') status = 'Rejected';
 
             await Job.findOneAndUpdate(
-              { originalEmailId: email.id },
+              { emailId: email.id },
               {
                 userId: userEmail,
                 company: cls.company || 'Unknown Company',
@@ -317,7 +317,7 @@ class AutoScanService {
                 date: email.internalDate ? new Date(parseInt(email.internalDate)) : new Date(),
                 emailSnippet: email.snippet,
                 description: email.subject,
-                originalEmailId: email.id
+                emailId: email.id
               },
               { upsert: true, new: true }
             );

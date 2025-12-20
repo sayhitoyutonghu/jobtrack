@@ -34,7 +34,7 @@ const JobSchema = new mongoose.Schema({
     emailSnippet: {
         type: String
     },
-    originalEmailId: {
+    emailId: {
         type: String,
         unique: true,
         sparse: true // Allows null/undefined to not be unique, though we expect it to be present for scanned jobs

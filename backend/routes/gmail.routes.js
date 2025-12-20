@@ -247,7 +247,7 @@ router.get('/deep-stream-scan', async (req, res) => {
           }
 
           // --- NEW: DB Duplicate Check ---
-          const existingJob = await Job.findOne({ originalEmailId: message.id });
+          const existingJob = await Job.findOne({ emailId: message.id });
           if (existingJob) {
             stats.skipped++;
             // Update cache to reflect it's done
@@ -316,7 +316,7 @@ router.get('/deep-stream-scan', async (req, res) => {
 
           if (classification.company && classification.company !== 'Unknown') {
             const savedJob = await Job.findOneAndUpdate(
-              { originalEmailId: email.id },
+              { emailId: email.id },
               {
                 userId: await gmailService.getUserEmail(),
                 company: classification.company,
@@ -324,7 +324,7 @@ router.get('/deep-stream-scan', async (req, res) => {
                 status: STATUS_MAP[classification.label] || 'Applied',
                 date: email.internalDate ? new Date(parseInt(email.internalDate)) : new Date(),
                 description: email.subject,
-                originalEmailId: email.id
+                emailId: email.id
               },
               { upsert: true, new: true }
             );
@@ -456,7 +456,7 @@ router.get('/stream-scan', async (req, res) => {
         }
 
         // --- NEW: DB Duplicate Check ---
-        const existingJob = await Job.findOne({ originalEmailId: message.id });
+        const existingJob = await Job.findOne({ emailId: message.id });
         if (existingJob) {
           stats.skipped++;
           // Keep in cache so we don't even hit DB next time if possible, but DB is the source of truth
@@ -540,7 +540,7 @@ router.get('/stream-scan', async (req, res) => {
           }
 
           const savedJob = await Job.findOneAndUpdate(
-            { originalEmailId: email.id },
+            { emailId: email.id },
             {
               userId: userEmail,
               company: classification.company || 'Unknown',
@@ -549,7 +549,7 @@ router.get('/stream-scan', async (req, res) => {
               salary: classification.salary || 'Unknown',
               emailSnippet: classification.emailSnippet,
               date: email.internalDate ? new Date(parseInt(email.internalDate)) : new Date(),
-              originalEmailId: email.id,
+              emailId: email.id,
               description: email.subject
             },
             { upsert: true, new: true }
@@ -640,7 +640,7 @@ router.post('/scan', async (req, res) => {
         }
 
         // --- NEW: DB Duplicate Check ---
-        const existingJob = await Job.findOne({ originalEmailId: message.id });
+        const existingJob = await Job.findOne({ emailId: message.id });
         if (existingJob) {
           results.push({ id: message.id, skipped: 'db-duplicate', subject: email.subject });
           console.log(`↪️  [scan] skipped ${message.id} (already in DB)`);
@@ -767,7 +767,7 @@ router.post('/scan', async (req, res) => {
           }
 
           await Job.findOneAndUpdate(
-            { originalEmailId: email.id },
+            { emailId: email.id },
             {
               userId: userEmail,
               company: classification.company || 'Unknown Company',
@@ -778,7 +778,7 @@ router.post('/scan', async (req, res) => {
               date: email.internalDate ? new Date(parseInt(email.internalDate)) : new Date(),
               emailSnippet: classification.emailSnippet || email.snippet,
               description: email.subject,
-              originalEmailId: email.id
+              emailId: email.id
             },
             { upsert: true, new: true }
           );

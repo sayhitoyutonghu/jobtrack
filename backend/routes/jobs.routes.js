@@ -46,19 +46,19 @@ router.patch('/:id', async (req, res) => {
             // But frontend uses 'id' which is usually the email ID.
             // Let's make sure we are consistent.
             // The frontend sends 'id' which is the email ID.
-            // In our schema, we have 'originalEmailId'.
-            // So we should query by 'originalEmailId' OR '_id'.
+            // In our schema, we have 'emailId'.
+            // So we should query by 'emailId' OR '_id'.
             // Let's assume frontend sends the MongoDB _id if it has it, or the email ID.
             // Wait, the frontend ID comes from Gmail ID initially.
             // When we save to DB, we should probably return the DB _id.
             // BUT to keep it simple and compatible with existing frontend which uses Gmail IDs:
-            // We should probably use `originalEmailId` as the key if possible.
+            // We should probably use `emailId` as the key if possible.
             // Let's check the schema again.
-            // Schema: originalEmailId (unique).
+            // Schema: emailId (unique).
 
-            // If the frontend sends an ID that looks like a Gmail ID (hex string), use originalEmailId.
+            // If the frontend sends an ID that looks like a Gmail ID (hex string), use emailId.
             // If it looks like a Mongo ID (24 hex chars), use _id.
-            // Actually, let's just try to find by originalEmailId first.
+            // Actually, let's just try to find by emailId first.
             { $set: updates },
             { new: true }
         );
@@ -85,8 +85,8 @@ router.patch('/:id', async (req, res) => {
 router.delete('/:id', async (req, res) => {
     try {
         const { id } = req.params;
-        // Try delete by originalEmailId
-        let result = await Job.findOneAndDelete({ originalEmailId: id });
+        // Try delete by emailId
+        let result = await Job.findOneAndDelete({ emailId: id });
 
         if (!result) {
             // Try delete by _id
