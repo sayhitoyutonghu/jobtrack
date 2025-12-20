@@ -842,9 +842,7 @@ export default function JobTrackBoard({ isAuthenticated }: JobTrackBoardProps) {
 
     // Real-time Scan Logs State
     const [showLogTerminal, setShowLogTerminal] = useState(false);
-    const [scanLogs, setScanLogs] = useState<any[]>([]);
-    const [scanProgress, setScanProgress] = useState(0);
-    const [scanStatus, setScanStatus] = useState("Idle");
+    // Removed duplicate state declarations (handled by context)
 
 
     // Listen for scan config updates from ScanLogs
@@ -1222,12 +1220,6 @@ export default function JobTrackBoard({ isAuthenticated }: JobTrackBoardProps) {
                     logs={scanLogs}
                     progress={scanProgress}
                     status={scanStatus}
-                />
-            )}
-            onClose={() => setShowLogTerminal(false)}
-            logs={scanLogs}
-            progress={scanProgress}
-            status={scanStatus}
                 />
             )}
         </div>
