@@ -249,6 +249,7 @@ const requireAuth = (req, res, next) => {
 app.use('/api/gmail', requireAuth, require('./routes/gmail.routes'));
 app.use('/api/jobs', requireAuth, require('./routes/jobs.routes'));
 app.use('/api/labels', requireAuth, require('./routes/labels.routes')); // Auth required for Gmail integration
+app.use('/api/maintenance', requireAuth, require('./routes/maintenance.routes'));
 
 // 自动管理器API端点
 app.get('/api/auto-manager/status', (req, res) => {
