@@ -246,6 +246,20 @@ router.get('/deep-stream-scan', async (req, res) => {
             continue;
           }
 
+          // --- NEW: DB Duplicate Check ---
+          const existingJob = await Job.findOne({ originalEmailId: message.id });
+          if (existingJob) {
+            stats.skipped++;
+            // Update cache to reflect it's done
+            await seenCache.set(message.id, { labeled: existingJob.status || 'Applied', method: 'db-existing', at: Date.now() });
+
+            if (stats.skipped % 20 === 0) {
+              sendEvent('log', { message: `⏭️ Skipped ${stats.skipped} (DB/Cache)...` });
+            }
+            continue;
+          }
+          // -------------------------------
+
           // 3. Custom Rules
           const customResult = await customClassifier.classify(email);
           if (customResult && customResult.success) {
@@ -291,6 +305,15 @@ router.get('/deep-stream-scan', async (req, res) => {
 
           // DB Save
           const STATUS_MAP = { 'Application': 'Applied', 'Interview': 'Interviewing', 'Offer': 'Offer', 'Rejected': 'Rejected' };
+
+          // Validate before saving
+          if (!classification.company || classification.company === 'Unknown' || !classification.role || classification.role === 'Unknown') {
+            console.log(`👻 [deep-scan] Skipping ghost job (missing metadata): ${email.subject}`);
+            stats.skipped++;
+            await seenCache.set(message.id, { skipped: 'missing-metadata', at: Date.now() });
+            continue;
+          }
+
           if (classification.company && classification.company !== 'Unknown') {
             const savedJob = await Job.findOneAndUpdate(
               { originalEmailId: email.id },
@@ -431,6 +454,23 @@ router.get('/stream-scan', async (req, res) => {
           sendEvent('progress', { percent: progress, type: 'skipped', reason: 'Empty Body', subject: email.subject });
           continue;
         }
+
+        // --- NEW: DB Duplicate Check ---
+        const existingJob = await Job.findOne({ originalEmailId: message.id });
+        if (existingJob) {
+          stats.skipped++;
+          // Keep in cache so we don't even hit DB next time if possible, but DB is the source of truth
+          await seenCache.set(message.id, { labeled: existingJob.status || 'Applied', method: 'db-existing', at: Date.now() });
+
+          sendEvent('progress', {
+            percent: progress,
+            type: 'skipped',
+            reason: 'Already in DB',
+            subject: email.subject
+          });
+          continue;
+        }
+        // -------------------------------
 
         sendEvent('log', { message: `🧠 Analyzing: "${email.subject}"...` });
 
@@ -598,6 +638,16 @@ router.post('/scan', async (req, res) => {
           console.log(`↪️  [scan] skipped ${email.id} (empty-body)`);
           continue;
         }
+
+        // --- NEW: DB Duplicate Check ---
+        const existingJob = await Job.findOne({ originalEmailId: message.id });
+        if (existingJob) {
+          results.push({ id: message.id, skipped: 'db-duplicate', subject: email.subject });
+          console.log(`↪️  [scan] skipped ${message.id} (already in DB)`);
+          await seenCache.set(message.id, { labeled: existingJob.status || 'Applied', method: 'db-existing', at: Date.now() });
+          continue;
+        }
+        // -------------------------------
 
         // First try custom label classification (for any email type)
         const customResult = await customClassifier.classify(email);
