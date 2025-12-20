@@ -29,7 +29,8 @@ export const ScanProvider = ({ children }) => {
             query = 'newer_than:7d',
             maxResults = 50,
             scanSource = 'inbox', // 'inbox' or 'unread'
-            dateRange = '7d'
+            dateRange = '7d',
+            endpoint = '/api/gmail/stream-scan'
         } = options;
 
         setIsScanning(true);
@@ -39,7 +40,7 @@ export const ScanProvider = ({ children }) => {
 
         // Build the query
         let finalQuery = query;
-        if (scanSource === 'unread') {
+        if (scanSource === 'unread' && !query.includes('is:unread')) {
             finalQuery = `is:unread ${query}`;
         }
 
@@ -50,7 +51,7 @@ export const ScanProvider = ({ children }) => {
             return;
         }
 
-        const url = `${API_BASE_URL}/api/gmail/stream-scan?query=${encodeURIComponent(finalQuery)}&maxResults=${maxResults}&sessionId=${sessionId}`;
+        const url = `${API_BASE_URL}${endpoint}?query=${encodeURIComponent(finalQuery)}&maxResults=${maxResults}&sessionId=${sessionId}`;
 
         const eventSource = new EventSource(url);
         eventSourceRef.current = eventSource;
