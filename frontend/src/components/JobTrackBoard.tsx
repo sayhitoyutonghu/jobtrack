@@ -817,12 +817,16 @@ export default function JobTrackBoard({ isAuthenticated }: JobTrackBoardProps) {
             }
         }
 
+        // Construct query manually to ensure correct behavior until ScanContext is fully robust
+        const sourceQuery = scanSource === 'inbox' ? 'in:inbox' : 'is:unread';
+        const query = `${sourceQuery} newer_than:${dateRange}`;
+
         // Trigger global scan
         performScan({
-            query: scanQuery,
-            maxResults: scanLimit,
-            scanSource: 'inbox', // or from settings
-            dateRange: '7d'
+            query: query,
+            maxResults: maxResults,
+            scanSource: scanSource,
+            dateRange: dateRange
         });
     };
 
