@@ -3,6 +3,9 @@ const ClassifierService = require('./classifier.service');
 const CustomLabelClassifier = require('./custom-label-classifier.service');
 const Job = require('../models/Job');
 
+const PersistentCache = require('./persistent-cache.service');
+const path = require('path');
+
 class AutoScanService {
   constructor({ intervalMs = 300000, resolveSession }) { // 默认5分钟
     this.intervalMs = intervalMs;
@@ -11,6 +14,12 @@ class AutoScanService {
     this.scanHistory = new Map(); // 存储扫描历史
     this.errorCount = new Map(); // 错误计数
     this.maxRetries = 3; // 最大重试次数
+
+    // Initialize cache
+    this.seenCache = new PersistentCache({
+      filePath: path.join(__dirname, '../data/cache-seen.json'),
+      defaultTtlMs: 30 * 24 * 60 * 60 * 1000 // 30 days
+    });
   }
 
   start(sessionId, query = 'in:anywhere newer_than:2d', maxResults = 20) {
@@ -44,6 +53,13 @@ class AutoScanService {
         console.log(`[autoscan] tick session ${sessionId} -> ${msgs.length} messages`);
 
         for (const m of msgs) {
+          // Check cache first
+          const seen = await this.seenCache.get(m.id);
+          if (seen) {
+            console.log(`[autoscan] skipped ${m.id} (cached-seen)`);
+            continue;
+          }
+
           try {
             const email = await gmail.getEmail(m.id);
 
@@ -53,35 +69,28 @@ class AutoScanService {
               await gmail.applyLabelToThread(email.threadId, customResult.label, false);
               console.log(`[autoscan] custom labeled ${email.id} -> ${customResult.label} (${customResult.reason})`);
               processedCount++;
+              await this.seenCache.set(m.id, { labeled: customResult.label, method: 'custom', at: Date.now() });
               await gmail.sleep(100);
               continue;
             }
 
             // Then try job-related classification
-            if (!classifier.isJobRelated(email)) continue;
+            if (!classifier.isJobRelated(email)) {
+              await this.seenCache.set(m.id, { skipped: 'not-job-related', at: Date.now() });
+              continue;
+            }
 
             const cls = await classifier.classify(email);
-            if (!cls) continue;
+            if (!cls) {
+              await this.seenCache.set(m.id, { skipped: 'no-match', at: Date.now() });
+              continue;
+            }
 
             await gmail.applyLabelToThread(email.threadId, cls.label, false);
             console.log(`[autoscan] job labeled ${email.id} -> ${cls.label}`);
 
             // Save to MongoDB
             try {
-              // Extract user email from session auth if possible, or use a placeholder
-              // Since we don't have easy access to user email here without an API call,
-              // we'll try to get it from the email 'to' field or just use 'unknown' for now.
-              // Ideally, we should pass userEmail to start().
-
-              // For now, let's just save it. The userId field is required.
-              // We can use the session ID as a temporary userId if we have to, 
-              // but better to fetch profile once and store in session.
-
-              // Let's assume we can get the user profile email.
-              // Since this is async and inside a loop, let's do a quick hack:
-              // We'll use the 'Delivered-To' header or just the first 'To' address.
-              // Or better, we fetch the profile once at start of tick.
-
               const userEmail = await gmail.getUserEmail();
 
               const STATUS_MAP = {
@@ -113,6 +122,7 @@ class AutoScanService {
             }
 
             processedCount++;
+            await this.seenCache.set(m.id, { labeled: cls.label, method: cls.method, at: Date.now() });
 
             await gmail.sleep(100);
           } catch (emailError) {
@@ -231,6 +241,14 @@ class AutoScanService {
       const results = [];
 
       for (const m of msgs) {
+        // Check cache first
+        const seen = await this.seenCache.get(m.id);
+        if (seen) {
+          console.log(`[autoscan] runNow skipped ${m.id} (cached-seen)`);
+          results.push({ id: m.id, skipped: 'cached-seen' });
+          continue;
+        }
+
         try {
           const email = await gmail.getEmail(m.id);
           if (!email.body || email.body.length === 0) {
@@ -251,15 +269,22 @@ class AutoScanService {
               method: customResult.method,
               reason: customResult.reason
             });
+            await this.seenCache.set(m.id, { labeled: customResult.label, method: 'custom', at: Date.now() });
             await gmail.sleep(100);
             continue;
           }
 
           // Then try job-related classification
-          if (!classifier.isJobRelated(email)) continue;
+          if (!classifier.isJobRelated(email)) {
+            await this.seenCache.set(m.id, { skipped: 'not-job-related', at: Date.now() });
+            continue;
+          }
 
           const cls = await classifier.classify(email);
-          if (!cls) continue;
+          if (!cls) {
+            await this.seenCache.set(m.id, { skipped: 'no-match', at: Date.now() });
+            continue;
+          }
 
           await gmail.applyLabelToThread(email.threadId, cls.label, false);
           processedCount++;
@@ -300,7 +325,7 @@ class AutoScanService {
             console.error(`[autoscan] failed to save job to DB: ${dbError.message}`);
           }
 
-
+          await this.seenCache.set(m.id, { labeled: cls.label, method: cls.method, at: Date.now() });
           await gmail.sleep(100);
         } catch (emailError) {
           console.warn(`[autoscan] error processing email ${m.id}:`, emailError.message);
