@@ -818,8 +818,32 @@ export default function JobTrackBoard({ isAuthenticated }: JobTrackBoardProps) {
         }
 
         // Construct query manually to ensure correct behavior until ScanContext is fully robust
+        // Construct query manually
         const sourceQuery = scanSource === 'inbox' ? 'in:inbox' : 'is:unread';
-        const query = `${sourceQuery} newer_than:${dateRange}`;
+        let query = `${sourceQuery} newer_than:${dateRange}`;
+
+        // Handle monthly scan range (e.g., month_2025_12)
+        if (dateRange && dateRange.startsWith('month_')) {
+            try {
+                const parts = dateRange.split('_');
+                // Format could be month_YYYY_MM or similar, check usage in ScanLogs
+                // Assuming month_2025_11 means Year=2025, Month=11
+                if (parts.length >= 3) {
+                    const year = parseInt(parts[1], 10);
+                    const month = parseInt(parts[2], 10);
+                    const startDate = new Date(year, month - 1, 1);
+                    // End date is start of next month
+                    const endDate = new Date(year, month, 1);
+
+                    const format = (d: Date) => `${d.getFullYear()}/${d.getMonth() + 1}/${d.getDate()}`;
+                    query = `${sourceQuery} after:${format(startDate)} before:${format(endDate)}`;
+                }
+            } catch (e) {
+                console.error("Failed to parse month date range:", dateRange);
+                // Fallback to 30d if parsing fails
+                query = `${sourceQuery} newer_than:30d`;
+            }
+        }
 
         // Trigger global scan
         performScan({
