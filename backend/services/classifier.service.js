@@ -311,7 +311,6 @@ Body: "${trimmedBody}"`;
       }
 
       return this.createResult(category, 'medium', 'gemini-ai', {
-```
         rawResponse: text
       });
     } catch (error) {
@@ -326,8 +325,8 @@ Body: "${trimmedBody}"`;
           const text = response.text();
           const category = this.parseCategory(text);
           if (category) {
-             console.log('✓ Fallback to gemini-1.5-pro successful');
-             return this.createResult(category, 'medium', 'gemini-1.5-pro', { rawResponse: text });
+            console.log('✓ Fallback to gemini-1.5-pro successful');
+            return this.createResult(category, 'medium', 'gemini-1.5-pro', { rawResponse: text });
           }
         } catch (fallbackError) {
           console.error('Gemini fallback failed:', fallbackError.message);
@@ -416,7 +415,7 @@ Body: "${trimmedBody}"`;
       /resume (your )?application/i
     ];
 
-    const text = `${ subject } ${ body }`;
+    const text = `${subject} ${body}`;
     return REMINDER_PATTERNS.some(pattern => pattern.test(text));
   }
 
@@ -425,13 +424,13 @@ Body: "${trimmedBody}"`;
    */
   isOutboundJobApplication(email) {
     const subject = (email.subject || '').toLowerCase();
-    const text = `${ subject } ${ email.snippet || '' }`.toLowerCase();
+    const text = `${subject} ${email.snippet || ''}`.toLowerCase();
     const from = (email.from || '').toLowerCase();
 
     const isFromUser = from.includes('@gmail.com') ||
       email.threadLabels?.includes('SENT');
 
-    console.log(`[DEBUG] isOutbound ? from = "${from}" isFromUser = ${ isFromUser } subject = "${subject}"`);
+    console.log(`[DEBUG] isOutbound ? from = "${from}" isFromUser = ${isFromUser} subject = "${subject}"`);
 
     if (!isFromUser) return false;
 
@@ -441,7 +440,7 @@ Body: "${trimmedBody}"`;
     ];
 
     const match = APPLICATION_KEYWORDS.find(keyword => text.includes(keyword));
-    console.log(`[DEBUG] isOutbound keyword match: ${ match }`);
+    console.log(`[DEBUG] isOutbound keyword match: ${match}`);
     return !!match;
   }
 
@@ -451,7 +450,7 @@ Body: "${trimmedBody}"`;
   isFinanceReceipt(email) {
     const from = (email.from || '').toLowerCase();
     const subject = (email.subject || '').toLowerCase();
-    const text = `${ subject } ${(email.snippet || '').toLowerCase()}`;
+    const text = `${subject} ${(email.snippet || '').toLowerCase()}`;
 
     const FINANCE_KEYWORDS = [
       'receipt', 'invoice', 'payment', 'statement', 'order', 'subscription',
@@ -480,7 +479,7 @@ Body: "${trimmedBody}"`;
       'thank you for applying', 'application was viewed', 'your application was viewed'
     ];
 
-    const text = `${ email.subject || '' } ${ email.snippet || '' } ${ email.from || '' } ${ email.body || '' } `.toLowerCase();
+    const text = `${email.subject || ''} ${email.snippet || ''} ${email.from || ''} ${email.body || ''} `.toLowerCase();
 
     // DEBUG logging
     console.log('[DEBUG] isJobRelated check:');
@@ -583,7 +582,7 @@ Body: "${trimmedBody}"`;
 
     // If confidence is low (< 70), validate with a second model
     if (confidenceScore < 70) {
-      console.log(`⚠ Low confidence(${ confidenceScore }), validating with second model...`);
+      console.log(`⚠ Low confidence(${confidenceScore}), validating with second model...`);
 
       // Choose a different model for validation
       if (primaryModel === 'gemini' && this.useOpenAI) {
@@ -605,12 +604,12 @@ Body: "${trimmedBody}"`;
 
       // Check if models agree
       if (secondaryResult && secondaryResult.label !== primaryResult.label) {
-        console.warn(`⚠ Models disagree: ${ primaryModel }=${ primaryResult.label } vs second = ${ secondaryResult.label } `);
+        console.warn(`⚠ Models disagree: ${primaryModel}=${primaryResult.label} vs second = ${secondaryResult.label} `);
         needsReview = true;
 
         // Use the result with higher confidence
         if ((secondaryResult.confidenceScore || 50) > confidenceScore) {
-          console.log(`  → Using secondary result(higher confidence: ${ secondaryResult.confidenceScore })`);
+          console.log(`  → Using secondary result(higher confidence: ${secondaryResult.confidenceScore})`);
           primaryResult = secondaryResult;
         }
       }
@@ -631,7 +630,7 @@ Body: "${trimmedBody}"`;
   async fallbackRuleBasedClassify(email, cache, cacheKey) {
     const subject = (email.subject || '').toLowerCase();
     const body = (email.body || '').toLowerCase();
-    const text = `${ subject } ${ body } `;
+    const text = `${subject} ${body} `;
 
     // Check if outbound application
     if (this.isOutboundJobApplication(email)) {
