@@ -51,7 +51,7 @@ class EmailClassifier {
       try {
         const { GoogleGenerativeAI } = require("@google/generative-ai");
         this.genAI = new GoogleGenerativeAI(geminiApiKey);
-        this.geminiModel = this.genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+        this.geminiModel = this.genAI.getGenerativeModel({ model: "gemini-1.5-flash-001" });
         this.useGemini = true;
         console.log('✓ Gemini classification enabled');
       } catch (error) {
@@ -262,14 +262,20 @@ Body: "${trimmedBody}"`;
     try {
       const completion = await this.openai.chat.completions.create({
         model: OPENAI_MODEL,
-        messages: [{ role: 'user', content: prompt }],
+        messages: [
+          { role: 'system', content: 'You must output valid JSON.' },
+          { role: 'user', content: prompt }
+        ],
         max_tokens: 300,
-        temperature: OPENAI_TEMPERATURE
+        temperature: OPENAI_TEMPERATURE,
+        response_format: { type: "json_object" }
       });
+
+      console.log("[AI Raw Response]:", completion.choices[0]?.message?.content);
 
       const category = this.parseCategory(completion.choices[0]?.message?.content);
       if (!category) {
-        console.warn('[classifier][openai] Invalid category:', completion.choices[0]?.message?.content);
+        console.warn('[classifier][openai] Invalid category. Full response:', JSON.stringify(completion, null, 2));
         return null;
       }
 
