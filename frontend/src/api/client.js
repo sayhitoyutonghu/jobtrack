@@ -1,7 +1,7 @@
 import axios from 'axios';
 
 // Temporarily use Railway backend for both dev and prod (until local OAuth is configured)
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'https://jobtrack-production.up.railway.app';
+export const API_BASE_URL = import.meta.env.VITE_API_URL || 'https://jobtrack-production.up.railway.app';
 export const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID || '';
 
 const apiClient = axios.create({

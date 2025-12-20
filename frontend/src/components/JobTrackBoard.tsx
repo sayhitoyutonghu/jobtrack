@@ -26,7 +26,7 @@ import { CSS } from "@dnd-kit/utilities";
 import { clsx, type ClassValue } from "clsx";
 import { twMerge } from "tailwind-merge";
 import { GripVertical } from "lucide-react";
-import { gmailApi, authApi, jobsApi } from "../api/client.js";
+import { gmailApi, authApi, jobsApi, API_BASE_URL } from "../api/client.js";
 import WelcomeCard from "./WelcomeCard";
 import { MOCK_JOBS } from "../data/mockJobs";
 import { LogTerminal } from "./LogTerminal";
@@ -952,10 +952,8 @@ export default function JobTrackBoard({ isAuthenticated }: JobTrackBoardProps) {
             }
         }
 
-        // @ts-ignore
-        const backendUrl = import.meta.env.VITE_BACKEND_URL; // Using Vite env var if available, else fallback
-        const baseUrl = backendUrl || 'http://localhost:8080';
-        const url = `${baseUrl}/api/gmail/stream-scan?query=${encodeURIComponent(query)}&maxResults=${maxResults}&sessionId=${sessionId}`;
+        // Use the shared API_BASE_URL from client.js to ensure consistency
+        const url = `${API_BASE_URL}/api/gmail/stream-scan?query=${encodeURIComponent(query)}&maxResults=${maxResults}&sessionId=${sessionId}`;
 
         const eventSource = new EventSource(url);
         let scanSuccess = false;
