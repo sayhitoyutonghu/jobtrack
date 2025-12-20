@@ -142,6 +142,22 @@ export const ScanProvider = ({ children }) => {
             console.error("EventSource error:", e);
             setScanLogs(prev => [...prev, { type: 'error', text: `Error: ${msg}`, timestamp: new Date().toLocaleTimeString() }]);
             setScanStatus('Failed');
+
+            // Dispatch scanComplete even on error so it saves to history
+            window.dispatchEvent(new CustomEvent('scanComplete', {
+                detail: {
+                    success: false,
+                    error: msg || 'Unknown error',
+                    emailsFound: found,
+                    emailsScanned: scanned,
+                    query: finalQuery,
+                    scanSource,
+                    dateRange,
+                    allEmails,
+                    jobEmails
+                }
+            }));
+
             eventSource.close();
             setIsScanning(false);
             eventSourceRef.current = null;
