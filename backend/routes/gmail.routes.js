@@ -166,6 +166,184 @@ router.post('/analyze-email', async (req, res) => {
  * Scans and labels new emails
  */
 /**
+ * GET /api/gmail/deep-stream-scan
+ * Scans up to 1 year of emails with pagination, skips cache, and streams results.
+ */
+router.get('/deep-stream-scan', async (req, res) => {
+  // SSE Setup
+  res.setHeader('Content-Type', 'text/event-stream');
+  res.setHeader('Cache-Control', 'no-cache');
+  res.setHeader('Connection', 'keep-alive');
+  res.setHeader('Access-Control-Allow-Origin', '*');
+
+  const sendEvent = (type, data) => {
+    res.write(`event: ${type}\n`);
+    res.write(`data: ${JSON.stringify(data)}\n\n`);
+  };
+
+  const heartbeat = setInterval(() => {
+    res.write(': heartbeat\n\n');
+  }, 15000);
+
+  req.on('close', () => {
+    clearInterval(heartbeat);
+  });
+
+  try {
+    const maxResults = parseInt(req.query.maxResults) || 2000; // Limit total for deep scan
+    const query = req.query.query || 'newer_than:1y'; // Default to 1 year
+
+    // Auth Check
+    if (!req.user || !req.user.auth) {
+      sendEvent('error', { message: 'Authentication required' });
+      return res.end();
+    }
+
+    const gmailService = new GmailService(req.user.auth);
+    const customClassifier = new CustomLabelClassifier();
+    const PersistentCache = require('../services/persistent-cache.service');
+    const path = require('path');
+    const seenCache = new PersistentCache({
+      filePath: path.join(__dirname, '../data/cache-seen.json'),
+      defaultTtlMs: 365 * 24 * 60 * 60 * 1000 // 1 year TTL for deep scan cache
+    });
+    const ClassifierService = require('../services/classifier.service');
+    const Job = require('../models/Job');
+
+    sendEvent('log', { message: `🚀 Starting Deep Scan (1 Year)... Query: "${query}"` });
+
+    let stats = { totalFetched: 0, processed: 0, skipped: 0, errors: 0 };
+    let totalProcessed = 0;
+
+    // Use generator to fetch pages
+    for await (const batch of gmailService.scanMessagesGenerator(query, maxResults)) {
+      stats.totalFetched += batch.length;
+      sendEvent('log', { message: `📦 Fetched batch of ${batch.length} emails (Total: ${stats.totalFetched})...` });
+
+      for (const message of batch) {
+        // Stop if client disconnected
+        if (res.writableEnded) break;
+
+        const progress = Math.min(Math.round((stats.totalFetched / maxResults) * 100), 99);
+
+        try {
+          // 1. Check Cache (Critical for Deep Scan)
+          const seen = await seenCache.get(message.id);
+          if (seen) {
+            stats.skipped++;
+            // Don't log every skip in deep scan to avoid spam, just update stats occasionally or use a special type
+            if (stats.skipped % 50 === 0) {
+              sendEvent('log', { message: `⏭️ Skipped ${stats.skipped} cached emails so far...` });
+            }
+            continue;
+          }
+
+          // 2. Fetch Email
+          const email = await gmailService.getEmail(message.id);
+          if (!email.body || email.body.length === 0) {
+            stats.skipped++;
+            await seenCache.set(message.id, { skipped: 'empty', at: Date.now() });
+            continue;
+          }
+
+          // 3. Custom Rules
+          const customResult = await customClassifier.classify(email);
+          if (customResult && customResult.success) {
+            await gmailService.applyLabelToThread(email.threadId, customResult.label, false);
+            stats.processed++;
+            sendEvent('progress', {
+              percent: progress,
+              type: 'match',
+              job: { id: email.id, company: 'Custom Rule', role: customResult.label, status: 'Applied' },
+              log: `✅ [Custom] ${email.subject} -> ${customResult.label}`
+            });
+            await seenCache.set(message.id, { labeled: customResult.label, method: 'custom', at: Date.now() });
+            continue;
+          }
+
+          // 4. Quick Filter
+          const clfNoAI = new ClassifierService({ enableAI: false });
+          if (!clfNoAI.isJobRelated(email)) {
+            stats.skipped++;
+            await seenCache.set(message.id, { skipped: 'filter', at: Date.now() });
+            continue;
+          }
+
+          // 5. AI Classification
+          sendEvent('log', { message: `🧠 Analyzing: "${email.subject}"...` });
+
+          const classifier = new ClassifierService({
+            enableAI: true,
+            openaiApiKey: process.env.OPENAI_API_KEY,
+            anthropicApiKey: process.env.ANTHROPIC_API_KEY,
+            geminiApiKey: process.env.GEMINI_API_KEY
+          });
+
+          const classification = await classifier.classify(email);
+          if (!classification) {
+            stats.skipped++;
+            await seenCache.set(message.id, { skipped: 'no-match', at: Date.now() });
+            continue;
+          }
+
+          // 6. Action
+          await gmailService.applyLabelToThread(email.threadId, classification.label, classification.config.moveToFolder);
+
+          // DB Save
+          const STATUS_MAP = { 'Application': 'Applied', 'Interview': 'Interviewing', 'Offer': 'Offer', 'Rejected': 'Rejected' };
+          if (classification.company && classification.company !== 'Unknown') {
+            const savedJob = await Job.findOneAndUpdate(
+              { originalEmailId: email.id },
+              {
+                userId: await gmailService.getUserEmail(),
+                company: classification.company,
+                role: classification.role || 'Unknown',
+                status: STATUS_MAP[classification.label] || 'Applied',
+                date: email.internalDate ? new Date(parseInt(email.internalDate)) : new Date(),
+                description: email.subject,
+                originalEmailId: email.id
+              },
+              { upsert: true, new: true }
+            );
+          }
+
+          stats.processed++;
+          sendEvent('progress', {
+            percent: progress,
+            type: 'match',
+            job: { company: classification.company, role: classification.role, status: classification.label },
+            log: `✅ Classified: ${classification.company} - ${classification.role}`
+          });
+
+          await seenCache.set(message.id, { labeled: classification.label, method: 'ai', at: Date.now() });
+
+          // Sleep to be nice to API
+          await new Promise(r => setTimeout(r, 200));
+
+        } catch (e) {
+          console.error(`Error processing ${message.id}:`, e);
+          stats.errors++;
+        }
+      }
+
+      // Sleep between batches
+      await new Promise(r => setTimeout(r, 1000));
+    }
+
+    sendEvent('log', { message: `🎉 Deep Scan Complete! Processed: ${stats.processed}, Skipped: ${stats.skipped}` });
+    sendEvent('complete', { stats });
+    res.end();
+
+  } catch (error) {
+    console.error('Deep scan error:', error);
+    sendEvent('error', { message: error.message });
+    res.end();
+  } finally {
+    clearInterval(heartbeat);
+  }
+});
+
+/**
  * GET /api/gmail/stream-scan
  * Scans emails and streams results via Server-Sent Events (SSE)
  */

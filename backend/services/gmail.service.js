@@ -608,6 +608,38 @@ class GmailService {
   }
 
   /**
+   * Scan for emails with pagination support (generator)
+   * Yields batches of messages
+   */
+  async *scanMessagesGenerator(query = 'is:unread', maxResults = 100) {
+    let pageToken = null;
+    let totalFetched = 0;
+
+    do {
+      // Calculate how many to fetch in this batch
+      // (API limit is usually 500 per call, keeping it safe)
+      const batchSize = Math.min(maxResults - totalFetched, 100);
+      if (batchSize <= 0) break;
+
+      const response = await this.gmail.users.messages.list({
+        userId: 'me',
+        q: query,
+        maxResults: batchSize,
+        pageToken: pageToken
+      });
+
+      const messages = response.data.messages || [];
+      if (messages.length === 0) break;
+
+      yield messages;
+
+      totalFetched += messages.length;
+      pageToken = response.data.nextPageToken;
+
+    } while (pageToken && totalFetched < maxResults);
+  }
+
+  /**
    * Helper: sleep function
    */
   sleep(ms) {
