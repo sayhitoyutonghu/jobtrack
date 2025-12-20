@@ -312,6 +312,24 @@ Body: "${trimmedBody}"`;
         rawResponse: text
       });
     } catch (error) {
+      // Specialized fallback for 404 (model not found)
+      if (error.message.includes('404') || error.message.includes('not found')) {
+        console.warn('[classifier][gemini] Primary model not found, falling back to gemini-pro...');
+        try {
+          const fallbackModel = this.genAI.getGenerativeModel({ model: "gemini-pro" });
+          const result = await fallbackModel.generateContent(prompt);
+          const response = await result.response;
+          const text = response.text();
+          const category = this.parseCategory(text);
+          if (category) {
+            console.log('✓ Fallback to gemini-pro successful');
+            return this.createResult(category, 'medium', 'gemini-pro', { rawResponse: text });
+          }
+        } catch (fallbackError) {
+          console.error('Gemini fallback failed:', fallbackError.message);
+        }
+      }
+
       console.error('Gemini classification failed:', error.message);
       return null;
     }
