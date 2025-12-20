@@ -17,7 +17,7 @@ const CATEGORY_MAP = {
   ghost: 'Ghost'
 };
 
-const OPENAI_MODEL = process.env.OPENAI_MODEL || 'gpt-4o-mini';
+const OPENAI_MODEL = process.env.OPENAI_MODEL || 'gpt-3.5-turbo';
 const ANTHROPIC_MODEL = process.env.ANTHROPIC_MODEL || 'claude-3-opus-20240229';
 const OPENAI_TEMPERATURE = Number.isFinite(Number(process.env.OPENAI_TEMPERATURE))
   ? Number(process.env.OPENAI_TEMPERATURE)
@@ -159,7 +159,24 @@ Body: "${trimmedBody}"`;
     text = text.replace(/```json/g, '').replace(/```/g, '').trim();
 
     try {
-      const json = JSON.parse(text);
+      let json;
+      try {
+        json = JSON.parse(text);
+      } catch (e) {
+        // Fallback: Try to find the first '{' and last '}'
+        const firstOpen = text.indexOf('{');
+        const lastClose = text.lastIndexOf('}');
+        if (firstOpen !== -1 && lastClose !== -1 && lastClose > firstOpen) {
+          const potentialJson = text.substring(firstOpen, lastClose + 1);
+          try {
+            json = JSON.parse(potentialJson);
+          } catch (innerE) {
+            throw e; // Throw original error if extraction fails too
+          }
+        } else {
+          throw e;
+        }
+      }
 
       // Map confidence score to level
       let confidenceLevel = 'medium';
@@ -247,8 +264,7 @@ Body: "${trimmedBody}"`;
         model: OPENAI_MODEL,
         messages: [{ role: 'user', content: prompt }],
         max_tokens: 300,
-        temperature: OPENAI_TEMPERATURE,
-        response_format: { type: "json_object" }
+        temperature: OPENAI_TEMPERATURE
       });
 
       const category = this.parseCategory(completion.choices[0]?.message?.content);
@@ -261,7 +277,7 @@ Body: "${trimmedBody}"`;
         rawResponse: completion
       });
     } catch (error) {
-      console.error('OpenAI classification failed:', error.message);
+      console.error("[AI] OpenAI Error Details:", error.response ? error.response.data : error.message);
       return null;
     }
   }
