@@ -289,8 +289,7 @@ router.get('/deep-stream-scan', async (req, res) => {
           const classifier = new ClassifierService({
             enableAI: true,
             openaiApiKey: process.env.OPENAI_API_KEY,
-            anthropicApiKey: process.env.ANTHROPIC_API_KEY,
-            geminiApiKey: process.env.GEMINI_API_KEY
+            anthropicApiKey: process.env.ANTHROPIC_API_KEY
           });
 
           const classification = await classifier.classify(email);
@@ -507,8 +506,7 @@ router.get('/stream-scan', async (req, res) => {
         const classifier = new ClassifierService({
           enableAI: true,
           openaiApiKey: process.env.OPENAI_API_KEY,
-          anthropicApiKey: process.env.ANTHROPIC_API_KEY,
-          geminiApiKey: process.env.GEMINI_API_KEY
+          anthropicApiKey: process.env.ANTHROPIC_API_KEY
         });
 
         const classification = await classifier.classify(email);
@@ -708,8 +706,7 @@ router.post('/scan', async (req, res) => {
         const classifier = new ClassifierService({
           enableAI: allowAIForThisEmail,
           openaiApiKey: process.env.OPENAI_API_KEY,
-          anthropicApiKey: process.env.ANTHROPIC_API_KEY,
-          geminiApiKey: process.env.GEMINI_API_KEY
+          anthropicApiKey: process.env.ANTHROPIC_API_KEY
         });
 
         const classification = await classifier.classify(email);

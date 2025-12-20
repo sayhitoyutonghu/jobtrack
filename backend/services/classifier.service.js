@@ -27,12 +27,11 @@ class EmailClassifier {
   constructor(options = {}) {
     this.useOpenAI = false;
     this.useAnthropic = false;
-    this.useGemini = false;
+    this.useAnthropic = false;
 
     const {
       openaiApiKey = process.env.OPENAI_API_KEY,
       anthropicApiKey = process.env.ANTHROPIC_API_KEY,
-      geminiApiKey = process.env.GEMINI_API_KEY,
       enableAI = true
     } = options;
 
@@ -58,21 +57,11 @@ class EmailClassifier {
       }
     }
 
-    if (enableAI && geminiApiKey && geminiApiKey !== 'your-gemini-key') {
-      try {
-        const { GoogleGenerativeAI } = require("@google/generative-ai");
-        this.genAI = new GoogleGenerativeAI(geminiApiKey);
-        this.geminiModel = this.genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
-        this.useGemini = true;
-        console.log('✓ Gemini classification enabled');
-      } catch (error) {
-        console.error('⚠ Failed to initialize Gemini SDK:', error.message);
-      }
-    }
+
 
     // Only log if we EXPECTED AI to be enabled/it was requested but failed
     // If the instance was created with enableAI: false (e.g. detailed scan), don't log warning.
-    if (this.enableAI && !this.useOpenAI && !this.useAnthropic && !this.useGemini) {
+    if (this.enableAI && !this.useOpenAI && !this.useAnthropic) {
       console.log('⚠ AI disabled (no valid API key provided)');
     }
   }
@@ -296,47 +285,7 @@ Body: "${trimmedBody}"`;
     }
   }
 
-  async classifyWithGemini(prompt) {
-    if (!this.useGemini) return null;
 
-    try {
-      const result = await this.geminiModel.generateContent(prompt);
-      const response = await result.response;
-      const text = response.text();
-
-      const category = this.parseCategory(text);
-      if (!category) {
-        console.warn('[classifier][gemini] Invalid category:', text);
-        return null;
-      }
-
-      return this.createResult(category, 'medium', 'gemini-ai', {
-        rawResponse: text
-      });
-    } catch (error) {
-      // Specialized fallback for 404 (model not found)
-      if (error.message.includes('404') || error.message.includes('not found')) {
-        console.warn('[classifier][gemini] Primary model not found, falling back to gemini-1.5-pro...');
-        try {
-          // Try Pro model as last resort
-          const fallbackModel = this.genAI.getGenerativeModel({ model: "gemini-1.5-pro" });
-          const result = await fallbackModel.generateContent(prompt);
-          const response = await result.response;
-          const text = response.text();
-          const category = this.parseCategory(text);
-          if (category) {
-            console.log('✓ Fallback to gemini-1.5-pro successful');
-            return this.createResult(category, 'medium', 'gemini-1.5-pro', { rawResponse: text });
-          }
-        } catch (fallbackError) {
-          console.error('Gemini fallback failed:', fallbackError.message);
-        }
-      }
-
-      console.error('Gemini classification failed:', error.message);
-      return null;
-    }
-  }
 
   /**
    * Check if this is a LinkedIn Job Alert email
@@ -536,7 +485,7 @@ Body: "${trimmedBody}"`;
     }
 
     // ========== AI PRIMARY CLASSIFICATION ==========
-    const hasAI = this.useOpenAI || this.useGemini || this.useAnthropic;
+    const hasAI = this.useOpenAI || this.useAnthropic;
 
     if (!hasAI) {
       console.warn('⚠ No AI available, falling back to rule-based classification');
@@ -548,15 +497,8 @@ Body: "${trimmedBody}"`;
     let primaryModel = null;
     const aiModelsUsed = [];
 
-    // Try Gemini first (fast & cheap)
-    if (this.useGemini) {
-      primaryResult = await this.classifyWithGemini(prompt);
-      primaryModel = 'gemini';
-      if (primaryResult) aiModelsUsed.push('gemini');
-    }
-
-    // Fallback to OpenAI if Gemini fails
-    if (!primaryResult && this.useOpenAI) {
+    // Use OpenAI
+    if (this.useOpenAI) {
       primaryResult = await this.classifyWithOpenAI(prompt);
       primaryModel = 'openai';
       if (primaryResult) aiModelsUsed.push('openai');
@@ -585,21 +527,9 @@ Body: "${trimmedBody}"`;
       console.log(`⚠ Low confidence(${confidenceScore}), validating with second model...`);
 
       // Choose a different model for validation
-      if (primaryModel === 'gemini' && this.useOpenAI) {
-        secondaryResult = await this.classifyWithOpenAI(prompt);
-        if (secondaryResult) aiModelsUsed.push('openai');
-      } else if (primaryModel === 'gemini' && this.useAnthropic) {
+      if (primaryModel === 'openai' && this.useAnthropic) {
         secondaryResult = await this.classifyWithAnthropic(prompt);
         if (secondaryResult) aiModelsUsed.push('anthropic');
-      } else if (primaryModel === 'openai' && this.useAnthropic) {
-        secondaryResult = await this.classifyWithAnthropic(prompt);
-        if (secondaryResult) aiModelsUsed.push('anthropic');
-      } else if (primaryModel === 'openai' && this.useGemini) {
-        secondaryResult = await this.classifyWithGemini(prompt);
-        if (secondaryResult) aiModelsUsed.push('gemini');
-      } else if (primaryModel === 'anthropic' && this.useGemini) {
-        secondaryResult = await this.classifyWithGemini(prompt);
-        if (secondaryResult) aiModelsUsed.push('gemini');
       }
 
       // Check if models agree

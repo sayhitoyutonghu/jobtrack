@@ -45,8 +45,7 @@ class AutoScanService {
         const gmail = new GmailService(session.auth);
         const classifier = new ClassifierService({
           openaiApiKey: process.env.OPENAI_API_KEY,
-          anthropicApiKey: process.env.ANTHROPIC_API_KEY,
-          geminiApiKey: process.env.GEMINI_API_KEY
+          anthropicApiKey: process.env.ANTHROPIC_API_KEY
         });
         const customClassifier = new CustomLabelClassifier();
         const msgs = await gmail.scanNewEmails(query, maxResults);
