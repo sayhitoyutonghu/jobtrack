@@ -59,6 +59,16 @@ class AutoScanService {
             continue;
           }
 
+          // --- NEW: DB Duplicate Check ---
+          const existingJob = await Job.findOne({ emailId: m.id });
+          if (existingJob) {
+            console.log(`[autoscan] skipped ${m.id} (already in DB)`);
+            // Update cache to reflect it's done
+            await this.seenCache.set(m.id, { labeled: existingJob.status || 'Applied', method: 'db-existing', at: Date.now() });
+            continue;
+          }
+          // -------------------------------
+
           try {
             const email = await gmail.getEmail(m.id);
 
