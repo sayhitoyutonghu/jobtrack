@@ -11,6 +11,7 @@ import JobTrackBoard from './components/JobTrackBoard';
 import ScanLogs from './components/ScanLogs';
 import PrivacyPolicy from './components/PrivacyPolicy';
 import { authApi, gmailApi } from './api/client.js';
+import { ScanProvider } from './contexts/ScanContext';
 import logo from './assets/logo.png';
 import './App.css';
 
@@ -184,7 +185,11 @@ function App() {
   return (
     <Router>
       <Routes>
-        <Route path="/" element={<MainApp />} />
+        <Route path="/" element={
+          <ScanProvider>
+            <MainApp />
+          </ScanProvider>
+        } />
         <Route path="/privacy" element={<PrivacyPolicy />} />
       </Routes>
     </Router>

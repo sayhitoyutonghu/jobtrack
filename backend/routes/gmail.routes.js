@@ -312,6 +312,15 @@ router.get('/stream-scan', async (req, res) => {
           // ... DB Saving Logic ...
           const userEmail = await gmailService.getUserEmail();
 
+          // Prevent "Ghost" Jobs: Check for missing metadata
+          if (!classification.company || classification.company === 'Unknown' || !classification.role || classification.role === 'Unknown') {
+            console.log(`👻 [scan] Skipping ghost job (missing metadata): ${email.subject}`);
+            stats.skipped++;
+            sendEvent('progress', { percent: progress, type: 'skipped', reason: 'Missing Metadata', subject: email.subject });
+            await seenCache.set(message.id, { skipped: 'missing-metadata', at: Date.now() });
+            continue;
+          }
+
           const savedJob = await Job.findOneAndUpdate(
             { originalEmailId: email.id },
             {
@@ -521,6 +530,13 @@ router.post('/scan', async (req, res) => {
             'Rejected': 'Rejected',
             'Ghost': 'Rejected'
           };
+
+          // Prevent "Ghost" Jobs: Check for missing metadata
+          if (!classification.company || classification.company === 'Unknown' || !classification.role || classification.role === 'Unknown') {
+            console.log(`👻 [scan] Skipping ghost job (missing metadata): ${email.subject}`);
+            results.push({ id: email.id, skipped: 'missing-metadata' });
+            continue;
+          }
 
           await Job.findOneAndUpdate(
             { originalEmailId: email.id },

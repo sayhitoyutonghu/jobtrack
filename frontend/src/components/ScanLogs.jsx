@@ -1,7 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { Clock, Mail, CheckCircle, XCircle, Settings, RefreshCcw } from 'lucide-react';
+import { useScan } from '../contexts/ScanContext';
+import { LogTerminal } from './LogTerminal';
 
 const ScanLogs = () => {
+    const { isScanning, scanLogs: liveLogs, scanProgress, scanStatus } = useScan();
     const [scanLogs, setScanLogs] = useState([]);
     const [maxResults, setMaxResults] = useState(50);
     const [tempMaxResults, setTempMaxResults] = useState(50);
@@ -131,6 +134,14 @@ const ScanLogs = () => {
 
     return (
         <div className="h-full w-full bg-zinc-50 p-8 overflow-y-auto">
+            {isScanning && (
+                <LogTerminal
+                    logs={liveLogs}
+                    progress={scanProgress}
+                    status={scanStatus}
+                    onClose={() => { }} // User shouldn't close it from here, or we can add cancelScan
+                />
+            )}
             <div className="max-w-5xl mx-auto space-y-6">
                 {/* Header */}
                 <div className="border-b-4 border-black pb-4">
