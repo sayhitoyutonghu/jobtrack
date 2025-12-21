@@ -591,6 +591,7 @@ router.get('/stream-scan', async (req, res) => {
           stats.processed++;
           const jobData = {
             id: savedJob.id,
+            emailId: savedJob.emailId,
             company: savedJob.company,
             role: savedJob.role,
             status: savedJob.status,
