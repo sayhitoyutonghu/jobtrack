@@ -1212,9 +1212,14 @@ export default function JobTrackBoard({ isAuthenticated }: JobTrackBoardProps) {
                 const activeIndex = jobs.findIndex((j) => j.id === activeId);
                 const newStatus = over.id as Status;
 
-                // If dropped in Trash, REMOVE visually but DO NOT call API yet
+                // If dropped in Trash, update status to 'Trash' (hides it from board) but keep in jobs for onDragEnd
                 if (newStatus === "Trash") {
-                    return jobs.filter(j => j.id !== activeId);
+                    if (jobs[activeIndex].status !== "Trash") {
+                        const newJobs = [...jobs];
+                        newJobs[activeIndex].status = "Trash";
+                        return newJobs;
+                    }
+                    return jobs;
                 }
 
                 if (jobs[activeIndex].status !== newStatus) {
