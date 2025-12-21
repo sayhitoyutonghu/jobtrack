@@ -587,6 +587,7 @@ class GmailService {
       from: getHeader('From'),
       to: getHeader('To'),
       date: getHeader('Date'),
+      internalDate: message.internalDate,
       snippet: message.snippet,
       body: clippedBody,
       plainBodyLength: normalizedBody.length,

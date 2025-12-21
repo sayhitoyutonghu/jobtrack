@@ -349,7 +349,7 @@ router.get('/deep-stream-scan', async (req, res) => {
           sendEvent('progress', {
             percent: progress,
             type: 'match',
-            job: { company: resolvedCompany, role: resolvedRole, status: status },
+            job: { company: resolvedCompany, role: resolvedRole, status: status, date: savedJob.date },
             log: `✅ Classified: ${resolvedCompany} - ${resolvedRole} (${status})`
           });
 
@@ -595,7 +595,8 @@ router.get('/stream-scan', async (req, res) => {
             company: savedJob.company,
             role: savedJob.role,
             status: savedJob.status,
-            salary: savedJob.salary
+            salary: savedJob.salary,
+            date: savedJob.date
           };
           processedResults.push(jobData);
 

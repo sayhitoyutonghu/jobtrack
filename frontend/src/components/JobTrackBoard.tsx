@@ -1127,25 +1127,36 @@ export default function JobTrackBoard({ isAuthenticated }: JobTrackBoardProps) {
         }
     }, [isAuthenticated]);
 
-    useEffect(() => {
-        async function fetchJobs() {
-            try {
-                if (!isAuthenticated) return;
-                setIsLoading(true);
-                const data = await jobsApi.getAll();
-                if (data.success && data.jobs) {
-                    setJobs(data.jobs);
-                } else {
-                    setJobs([]);
-                }
-            } catch (error) {
-                console.warn("Failed to fetch jobs:", error);
+    const fetchJobs = async () => {
+        try {
+            if (!isAuthenticated) return;
+            setIsLoading(true);
+            const data = await jobsApi.getAll();
+            if (data.success && data.jobs) {
+                setJobs(data.jobs);
+            } else {
                 setJobs([]);
-            } finally {
-                setIsLoading(false);
             }
+        } catch (error) {
+            console.warn("Failed to fetch jobs:", error);
+            setJobs([]);
+        } finally {
+            setIsLoading(false);
         }
+    };
+
+    useEffect(() => {
         fetchJobs();
+    }, [isAuthenticated]);
+
+    // Re-fetch jobs when scan completes
+    useEffect(() => {
+        const handleScanComplete = () => {
+            console.log('Scan complete, refreshing board...');
+            fetchJobs();
+        };
+        window.addEventListener('scanComplete', handleScanComplete);
+        return () => window.removeEventListener('scanComplete', handleScanComplete);
     }, [isAuthenticated]);
 
     const columns = useMemo(() => {
