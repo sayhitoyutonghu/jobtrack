@@ -158,6 +158,21 @@ export const jobsApi = {
   delete: async (jobId) => {
     const response = await apiClient.delete(`/api/jobs/${jobId}`);
     return response.data;
+  },
+
+  getTrash: async () => {
+    const response = await apiClient.get('/api/jobs/trash');
+    return response.data;
+  },
+
+  restore: async (jobId) => {
+    const response = await apiClient.post(`/api/jobs/${jobId}/restore`);
+    return response.data;
+  },
+
+  deletePermanent: async (jobId) => {
+    const response = await apiClient.delete(`/api/jobs/${jobId}/permanent`);
+    return response.data;
   }
 };
 

@@ -41,6 +41,14 @@ const JobSchema = new mongoose.Schema({
     },
     description: {
         type: String
+    },
+    trashed: {
+        type: Boolean,
+        default: false,
+        index: true
+    },
+    trashedDate: {
+        type: Date
     }
 }, {
     timestamps: true,

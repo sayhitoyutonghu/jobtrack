@@ -2,35 +2,36 @@ const express = require('express');
 const router = express.Router();
 const Job = require('../models/Job');
 
-// GET /api/jobs - Get all jobs for the current user
+// GET /api/jobs - Get all active jobs for the current user (excluding trashed)
 router.get('/', async (req, res) => {
     try {
-        // req.user is set by requireAuth middleware
-        // We use session ID or email to identify user. 
-        // Since we don't have user email in session object easily without another API call,
-        // we will use the session ID for now, BUT ideally we should use email.
-        // Let's try to get email from gmail profile if possible, or just use a consistent ID.
-        // For now, let's assume we want to fetch all jobs. 
-        // Wait, if we use session ID, it changes on login. We need a stable user ID.
-        // The `emailClassifier` will extract email from the profile.
-        // Let's assume the frontend passes the user email or we fetch it.
-
-        // Actually, let's fetch the user profile first to get the email address
-        // This might be slow. Better to store email in session when logging in.
-        // For this iteration, let's fetch all jobs and filter by what?
-        // We need to know WHO is logged in.
-
-        // Let's use the google oauth client to get the user's email
         const oauth2Client = req.user.auth;
         const gmail = require('googleapis').google.gmail({ version: 'v1', auth: oauth2Client });
         const profile = await gmail.users.getProfile({ userId: 'me' });
         const userEmail = profile.data.emailAddress;
 
-        const jobs = await Job.find({ userId: userEmail }).sort({ date: -1 });
+        // Only fetch non-trashed jobs
+        const jobs = await Job.find({ userId: userEmail, trashed: { $ne: true } }).sort({ date: -1 });
         res.json({ success: true, jobs });
     } catch (error) {
         console.error('Error fetching jobs:', error);
         res.status(500).json({ success: false, error: 'Failed to fetch jobs' });
+    }
+});
+
+// GET /api/jobs/trash - Get all trashed jobs
+router.get('/trash', async (req, res) => {
+    try {
+        const oauth2Client = req.user.auth;
+        const gmail = require('googleapis').google.gmail({ version: 'v1', auth: oauth2Client });
+        const profile = await gmail.users.getProfile({ userId: 'me' });
+        const userEmail = profile.data.emailAddress;
+
+        const jobs = await Job.find({ userId: userEmail, trashed: true }).sort({ trashedDate: -1 });
+        res.json({ success: true, jobs });
+    } catch (error) {
+        console.error('Error fetching trashed jobs:', error);
+        res.status(500).json({ success: false, error: 'Failed to fetch trashed jobs' });
     }
 });
 
@@ -41,36 +42,16 @@ router.patch('/:id', async (req, res) => {
         const updates = req.body;
 
         const job = await Job.findOneAndUpdate(
-            { id: id }, // We used 'id' (string) in frontend, but MongoDB uses _id. Let's check schema.
-            // Schema has 'id' field? No, it has default _id. 
-            // But frontend uses 'id' which is usually the email ID.
-            // Let's make sure we are consistent.
-            // The frontend sends 'id' which is the email ID.
-            // In our schema, we have 'emailId'.
-            // So we should query by 'emailId' OR '_id'.
-            // Let's assume frontend sends the MongoDB _id if it has it, or the email ID.
-            // Wait, the frontend ID comes from Gmail ID initially.
-            // When we save to DB, we should probably return the DB _id.
-            // BUT to keep it simple and compatible with existing frontend which uses Gmail IDs:
-            // We should probably use `emailId` as the key if possible.
-            // Let's check the schema again.
-            // Schema: emailId (unique).
-
-            // If the frontend sends an ID that looks like a Gmail ID (hex string), use emailId.
-            // If it looks like a Mongo ID (24 hex chars), use _id.
-            // Actually, let's just try to find by emailId first.
+            { emailId: id },
             { $set: updates },
             { new: true }
         );
 
         if (!job) {
-            // Try finding by _id
             try {
                 const jobById = await Job.findByIdAndUpdate(id, { $set: updates }, { new: true });
                 if (jobById) return res.json({ success: true, job: jobById });
-            } catch (e) {
-                // Ignore invalid object id error
-            }
+            } catch (e) { }
             return res.status(404).json({ success: false, error: 'Job not found' });
         }
 
@@ -81,15 +62,71 @@ router.patch('/:id', async (req, res) => {
     }
 });
 
-// DELETE /api/jobs/:id - Delete a job
+// POST /api/jobs/:id/restore - Restore a trashed job
+router.post('/:id/restore', async (req, res) => {
+    try {
+        const { id } = req.params;
+        const updates = { trashed: false, trashedDate: null };
+
+        let job = await Job.findOneAndUpdate(
+            { emailId: id },
+            { $set: updates },
+            { new: true }
+        );
+
+        if (!job) {
+            try {
+                job = await Job.findByIdAndUpdate(id, { $set: updates }, { new: true });
+            } catch (e) { }
+        }
+
+        if (!job) {
+            return res.status(404).json({ success: false, error: 'Job not found' });
+        }
+
+        res.json({ success: true, job });
+    } catch (error) {
+        console.error('Error restoring job:', error);
+        res.status(500).json({ success: false, error: 'Failed to restore job' });
+    }
+});
+
+// DELETE /api/jobs/:id - Soft Delete a job (Move to Trash)
 router.delete('/:id', async (req, res) => {
     try {
         const { id } = req.params;
-        // Try delete by emailId
+        const updates = { trashed: true, trashedDate: new Date() };
+
+        let job = await Job.findOneAndUpdate(
+            { emailId: id },
+            { $set: updates },
+            { new: true }
+        );
+
+        if (!job) {
+            try {
+                job = await Job.findByIdAndUpdate(id, { $set: updates }, { new: true });
+            } catch (e) { }
+        }
+
+        if (!job) {
+            return res.status(404).json({ success: false, error: 'Job not found' });
+        }
+
+        res.json({ success: true, message: 'Job moved to trash' });
+    } catch (error) {
+        console.error('Error moving job to trash:', error);
+        res.status(500).json({ success: false, error: 'Failed to move job to trash' });
+    }
+});
+
+// DELETE /api/jobs/:id/permanent - Permanently Delete a job
+router.delete('/:id/permanent', async (req, res) => {
+    try {
+        const { id } = req.params;
         let result = await Job.findOneAndDelete({ emailId: id });
 
         if (!result) {
-            // Try delete by _id
             try {
                 result = await Job.findByIdAndDelete(id);
             } catch (e) { }
@@ -99,9 +136,9 @@ router.delete('/:id', async (req, res) => {
             return res.status(404).json({ success: false, error: 'Job not found' });
         }
 
-        res.json({ success: true, message: 'Job deleted' });
+        res.json({ success: true, message: 'Job permanently deleted' });
     } catch (error) {
-        console.error('Error deleting job:', error);
+        console.error('Error permanently deleting job:', error);
         res.status(500).json({ success: false, error: 'Failed to delete job' });
     }
 });
