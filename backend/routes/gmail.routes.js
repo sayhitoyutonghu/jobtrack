@@ -301,7 +301,7 @@ router.get('/deep-stream-scan', async (req, res) => {
 
           // 6. Action
           if (!classification.isSkip) {
-            await gmailService.applyLabelToThread(email.threadId, classification.label, classification.config.moveToFolder);
+            await gmailService.applyLabelToThread(email.threadId, classification.label, classification.config?.moveToFolder);
           }
 
           // DB Save
@@ -535,7 +535,7 @@ router.get('/stream-scan', async (req, res) => {
         } else {
           // Success!
           if (!classification.isSkip) {
-            await gmailService.applyLabelToThread(email.threadId, classification.label, classification.config.moveToFolder);
+            await gmailService.applyLabelToThread(email.threadId, classification.label, classification.config?.moveToFolder);
           }
 
           // Save DB
@@ -796,7 +796,7 @@ router.post('/scan', async (req, res) => {
             await gmailService.applyLabelToThread(
               email.threadId,
               classification.label,
-              classification.config.moveToFolder
+              classification.config?.moveToFolder
             );
           } catch (e) {
             console.error(`[scan] apply label failed for ${email.id}:`, e.message);
