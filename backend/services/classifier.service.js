@@ -21,7 +21,7 @@ const OPENAI_MODEL = process.env.OPENAI_MODEL || 'gpt-4o-mini';
 const ANTHROPIC_MODEL = process.env.ANTHROPIC_MODEL || 'claude-3-opus-20240229';
 const OPENAI_TEMPERATURE = Number.isFinite(Number(process.env.OPENAI_TEMPERATURE))
   ? Number(process.env.OPENAI_TEMPERATURE)
-  : 0;
+  : 0.3;
 
 class EmailClassifier {
   constructor(options = {}) {
