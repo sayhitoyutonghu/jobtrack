@@ -51,7 +51,7 @@ class EmailClassifier {
       try {
         const { GoogleGenerativeAI } = require("@google/generative-ai");
         this.genAI = new GoogleGenerativeAI(geminiApiKey);
-        this.geminiModel = this.genAI.getGenerativeModel({ model: "gemini-1.5-flash-001" });
+        this.geminiModel = this.genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
         this.useGemini = true;
         console.log('✓ Gemini classification enabled');
       } catch (error) {
@@ -240,6 +240,10 @@ Body: "${trimmedBody}"`;
         confidenceScore: parsedData.confidenceScore,
         confidenceLevel: parsedData.confidenceLevel || confidence
       };
+    }
+
+    if (categoryName === 'other' || categoryName === 'promo') {
+      return { isSkip: true };
     }
 
     const labelConfig = JOB_LABELS.find(label => label.name.toLowerCase() === categoryName);
@@ -554,25 +558,35 @@ Body: "${trimmedBody}"`;
     let primaryModel = null;
     const aiModelsUsed = [];
 
-    // Step 1: Try OpenAI (Primary)
-    if (this.useOpenAI) {
-      console.log('[AI] Classifying with OpenAI (Primary)...');
-      primaryResult = await this.classifyWithOpenAI(prompt);
+    // Step 1: Try Gemini (Primary)
+    if (this.useGemini) {
+      console.log('[AI] Classifying with Gemini (Primary)...');
+      primaryResult = await this.classifyWithGemini(prompt);
       if (primaryResult) {
-        primaryModel = 'openai';
-        aiModelsUsed.push('openai');
+        if (primaryResult.isSkip) {
+          console.log('⏭️  Skipping email (Category: Other/Promo)');
+          await cache.set(cacheKey, null, 60 * 60 * 1000);
+          return null;
+        }
+        primaryModel = 'gemini';
+        aiModelsUsed.push('gemini');
       } else {
-        console.log('⚠️ OpenAI failed or returned null, switching to Gemini...');
+        console.log('⚠️ Gemini failed or returned null, switching to OpenAI...');
       }
     }
 
-    // Step 2: Try Gemini (Fallback)
-    if (!primaryResult && this.useGemini) {
-      console.log('[AI] Calling Gemini (Fallback)...');
-      primaryResult = await this.classifyWithGemini(prompt);
+    // Step 2: Try OpenAI (Fallback)
+    if (!primaryResult && this.useOpenAI) {
+      console.log('[AI] Calling OpenAI (Fallback)...');
+      primaryResult = await this.classifyWithOpenAI(prompt);
       if (primaryResult) {
-        primaryModel = 'gemini';
-        aiModelsUsed.push('gemini');
+        if (primaryResult.isSkip) {
+          console.log('⏭️  Skipping email (Category: Other/Promo)');
+          await cache.set(cacheKey, null, 60 * 60 * 1000);
+          return null;
+        }
+        primaryModel = 'openai';
+        aiModelsUsed.push('openai');
       }
     }
 
