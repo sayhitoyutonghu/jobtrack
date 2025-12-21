@@ -430,6 +430,7 @@ router.get('/stream-scan', async (req, res) => {
     });
     const ClassifierService = require('../services/classifier.service');
     const Job = require('../models/Job');
+    const IgnoredEmail = require('../models/IgnoredEmail');
 
     sendEvent('log', { message: `🔍 Starting scan for "${query}" (limit: ${maxResults})...` });
 
@@ -640,6 +641,8 @@ router.post('/scan', async (req, res) => {
       filePath: path.join(__dirname, '../data/cache-seen.json'),
       defaultTtlMs: 30 * 24 * 60 * 60 * 1000
     });
+    const Job = require('../models/Job');
+    const IgnoredEmail = require('../models/IgnoredEmail');
 
     console.log('📧 [scan] scanning for new emails...', {
       query,
