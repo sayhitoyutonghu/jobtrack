@@ -656,6 +656,14 @@ router.post('/scan', async (req, res) => {
 
     const results = [];
 
+    // Initialize Report Card
+    let skippedCount = 0;
+    let aiCount = 0;
+    let newJobsCount = 0;
+    let junkCount = 0;
+
+    console.log(`🔍 [Start] Scanning ${messages.length} emails from Gmail...`);
+
     for (const message of messages) {
       try {
         const email = await gmailService.getEmail(message.id);
@@ -663,12 +671,14 @@ router.post('/scan', async (req, res) => {
         // Skip if we've processed this message recently
         const seen = await seenCache.get(message.id);
         if (seen) {
+          skippedCount++;
           results.push({ id: message.id, subject: email?.subject, from: email?.from, date: email?.date, skipped: 'cached-seen' });
           console.log(`↪️  [scan] skipped ${message.id} (cached-seen)`);
           continue;
         }
 
         if (!email.body || email.body.length === 0) {
+          skippedCount++;
           results.push({ id: email.id, subject: email.subject, from: email.from, date: email.date, skipped: 'empty-body' });
           console.log(`↪️  [scan] skipped ${email.id} (empty-body)`);
           continue;
@@ -677,9 +687,18 @@ router.post('/scan', async (req, res) => {
         // --- NEW: DB Duplicate Check ---
         const existingJob = await Job.findOne({ emailId: message.id });
         if (existingJob) {
-          results.push({ id: message.id, skipped: 'db-duplicate', subject: email.subject });
-          console.log(`↪️  [scan] skipped ${message.id} (already in DB)`);
+          skippedCount++;
+          results.push({ id: message.id, skipped: 'db-duplicate-job', subject: email.subject });
+          console.log(`↪️  [scan] skipped ${message.id} (already in Job DB)`);
           await seenCache.set(message.id, { labeled: existingJob.status || 'Applied', method: 'db-existing', at: Date.now() });
+          continue;
+        }
+        const existingIgnored = await IgnoredEmail.findOne({ emailId: message.id });
+        if (existingIgnored) {
+          skippedCount++;
+          results.push({ id: message.id, skipped: 'db-duplicate-ignored', subject: email.subject });
+          console.log(`↪️  [scan] skipped ${message.id} (already in Ignored DB)`);
+          await seenCache.set(message.id, { labeled: 'Ignored', method: 'db-ignored', at: Date.now() });
           continue;
         }
         // -------------------------------
@@ -697,6 +716,7 @@ router.post('/scan', async (req, res) => {
             console.error(`[scan] apply custom label failed for ${email.id}:`, e.message);
           }
 
+          newJobsCount++; // Custom rule hits count as new jobs
           results.push({
             id: email.id,
             subject: email.subject,
@@ -708,6 +728,7 @@ router.post('/scan', async (req, res) => {
             reason: customResult.reason
           });
           console.log(`✅ [scan] custom labeled ${email.id} -> ${customResult.label} (${customResult.reason})`);
+          await seenCache.set(message.id, { labeled: customResult.label, at: Date.now() });
           continue;
         }
 
@@ -725,19 +746,24 @@ router.post('/scan', async (req, res) => {
             const logMsg = `[${new Date().toISOString()}] SKIPPED_FILTER: "${email.subject}" From: "${email.from}" Reason: ${reason}\n`;
             fs.appendFileSync('/tmp/scan.log', logMsg);
           } catch (e) { }
+
+          // Save valid skip to ignored
+          await IgnoredEmail.create({
+            emailId: message.id,
+            subject: email.subject,
+            sender: email.from,
+            reason: reason,
+            date: new Date()
+          });
+          junkCount++;
           results.push({ id: email.id, subject: email.subject, from: email.from, date: email.date, skipped: reason });
-          console.log(`↪️  [scan] skipped ${email.id} (${reason})`);
+          console.log(`↪️  [scan] skipped ${email.id} (${reason}) - Saved to Ignored`);
           await seenCache.set(message.id, { skipped: reason, at: Date.now() });
           continue;
         }
 
         // AI Policy: Use AI for all complex emails to ensure maximum accuracy
-        // especially for users with many job emails
-        const bodyLen = (email.body || '').length;
-        const isComplex = bodyLen > 500 || !email.subject || email.subject.length < 10;
-
-        // Always allow AI if it looks somewhat like a job email but missed keyword rules
-        // or if it's complex enough to warrant analysis
+        aiCount++;
         const allowAIForThisEmail = true; // Enabled 100% for better accuracy
 
         const classifier = new ClassifierService({
@@ -751,6 +777,7 @@ router.post('/scan', async (req, res) => {
         // Only trigger "no match" skip if it genuinely returned nothing (e.g., empty string body)
         // If it returns an object with isSkip: true, we PROCEED to save it.
         if (!classification) {
+          skippedCount++;
           // Log seen skip
           try {
             const fs = require('fs');
@@ -789,54 +816,68 @@ router.post('/scan', async (req, res) => {
 
         // Save to MongoDB (Persistence)
         try {
-          const userEmail = await gmailService.getUserEmail();
-          const STATUS_MAP = {
-            'Application': 'Applied',
-            'Interview': 'Interviewing',
-            'Offer': 'Offer',
-            'Rejected': 'Rejected',
-            'Ghost': 'Rejected'
-          };
-
-          let status = STATUS_MAP[classification.label] || 'Applied';
           if (classification.isSkip || classification.label === 'Other') {
-            status = 'skipped';
-          }
+            // 🗑️ Ignored
+            await IgnoredEmail.create({
+              emailId: email.id,
+              subject: classification.emailSnippet || email.subject,
+              sender: email.from,
+              reason: classification.category || 'other',
+              date: new Date()
+            });
+            junkCount++;
+            console.log(`🗑️ [scan] Saved to Ignored List (ID: ${email.id})`);
+          } else {
+            // 💎 Valid
+            const userEmail = await gmailService.getUserEmail();
+            const STATUS_MAP = {
+              'Application': 'Applied',
+              'Interview': 'Interviewing',
+              'Offer': 'Offer',
+              'Rejected': 'Rejected',
+              'Ghost': 'Rejected'
+            };
 
-          // Prevent "Ghost" Jobs: Check for missing metadata
-          // ONLY ENFORCE THIS IF IT IS A REAL JOB (not skipped)
-          if (status !== 'skipped') {
+            const status = STATUS_MAP[classification.label] || 'Applied';
+
+            // Prevent "Ghost" Jobs: Check for missing metadata
+            // ONLY ENFORCE THIS IF IT IS A REAL JOB (not skipped)
             if (!classification.company || classification.company === 'Unknown' || !classification.role || classification.role === 'Unknown') {
               console.log(`👻 [scan] Skipping ghost job (missing metadata): ${email.subject}`);
+              junkCount++; // Count as junk if missing metadata
+              await IgnoredEmail.create({
+                emailId: email.id,
+                subject: email.subject,
+                sender: email.from,
+                reason: 'missing-metadata',
+                date: new Date()
+              });
               results.push({ id: email.id, skipped: 'missing-metadata' });
               continue;
             }
-          }
 
-          await Job.findOneAndUpdate(
-            { emailId: email.id },
-            {
-              userId: userEmail,
-              company: classification.company || 'Unknown Company',
-              role: classification.role || 'Unknown Role',
-              status: status,
-              salary: classification.salary || 'Unknown',
-              location: classification.location || 'Unknown',
-              date: email.internalDate ? new Date(parseInt(email.internalDate)) : new Date(),
-              emailSnippet: classification.emailSnippet || email.snippet,
-              description: email.subject,
-              emailId: email.id,
-              category: classification.category || 'other'
-            },
-            { upsert: true, new: true }
-          );
-          if (status === 'skipped') {
-            console.log(`✅ [scan] Saved as SKIPPED (ID: ${email.id})`);
-          } else {
-            console.log(`💾 [scan] saved job ${email.id} to DB`);
+            await Job.findOneAndUpdate(
+              { emailId: email.id },
+              {
+                userId: userEmail,
+                company: classification.company || 'Unknown Company',
+                role: classification.role || 'Unknown Role',
+                status: status,
+                salary: classification.salary || 'Unknown',
+                location: classification.location || 'Unknown',
+                date: email.internalDate ? new Date(parseInt(email.internalDate)) : new Date(),
+                emailSnippet: classification.emailSnippet || email.snippet,
+                description: email.subject,
+                emailId: email.id,
+                category: classification.category || 'other'
+              },
+              { upsert: true, new: true }
+            );
+            newJobsCount++;
+            console.log(`✅ [scan] Saved Valid Job (ID: ${email.id})`);
           }
         } catch (dbError) {
-          console.error(`❌ [scan] save to DB failed for ${email.id}:`, dbError.message);
+          if (dbError.code !== 11000) console.error(`❌ [scan] save to DB failed for ${email.id}:`, dbError.message);
         }
 
         results.push({
