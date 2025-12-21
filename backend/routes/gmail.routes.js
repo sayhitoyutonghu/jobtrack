@@ -710,6 +710,9 @@ router.post('/scan', async (req, res) => {
         });
 
         const classification = await classifier.classify(email);
+
+        // Only trigger "no match" skip if it genuinely returned nothing (e.g., empty string body)
+        // If it returns an object with isSkip: true, we PROCEED to save it.
         if (!classification) {
           // Log seen skip
           try {
@@ -723,15 +726,17 @@ router.post('/scan', async (req, res) => {
           continue;
         }
 
-        // Apply label to the whole thread instead of just this message
-        try {
-          await gmailService.applyLabelToThread(
-            email.threadId,
-            classification.label,
-            classification.config.moveToFolder
-          );
-        } catch (e) {
-          console.error(`[scan] apply label failed for ${email.id}:`, e.message);
+        // Apply label to thread (ONLY if not skipped/junk)
+        if (!classification.isSkip) {
+          try {
+            await gmailService.applyLabelToThread(
+              email.threadId,
+              classification.label,
+              classification.config.moveToFolder
+            );
+          } catch (e) {
+            console.error(`[scan] apply label failed for ${email.id}:`, e.message);
+          }
         }
 
         // Debug: fetch labels applied to this thread for visibility verification
@@ -756,11 +761,19 @@ router.post('/scan', async (req, res) => {
             'Ghost': 'Rejected'
           };
 
+          let status = STATUS_MAP[classification.label] || 'Applied';
+          if (classification.isSkip || classification.label === 'Other') {
+            status = 'skipped';
+          }
+
           // Prevent "Ghost" Jobs: Check for missing metadata
-          if (!classification.company || classification.company === 'Unknown' || !classification.role || classification.role === 'Unknown') {
-            console.log(`👻 [scan] Skipping ghost job (missing metadata): ${email.subject}`);
-            results.push({ id: email.id, skipped: 'missing-metadata' });
-            continue;
+          // ONLY ENFORCE THIS IF IT IS A REAL JOB (not skipped)
+          if (status !== 'skipped') {
+            if (!classification.company || classification.company === 'Unknown' || !classification.role || classification.role === 'Unknown') {
+              console.log(`👻 [scan] Skipping ghost job (missing metadata): ${email.subject}`);
+              results.push({ id: email.id, skipped: 'missing-metadata' });
+              continue;
+            }
           }
 
           await Job.findOneAndUpdate(
@@ -769,17 +782,22 @@ router.post('/scan', async (req, res) => {
               userId: userEmail,
               company: classification.company || 'Unknown Company',
               role: classification.role || 'Unknown Role',
-              status: STATUS_MAP[classification.label] || 'Applied',
+              status: status,
               salary: classification.salary || 'Unknown',
               location: classification.location || 'Unknown',
               date: email.internalDate ? new Date(parseInt(email.internalDate)) : new Date(),
               emailSnippet: classification.emailSnippet || email.snippet,
               description: email.subject,
-              emailId: email.id
+              emailId: email.id,
+              category: classification.category || 'other'
             },
             { upsert: true, new: true }
           );
-          console.log(`💾 [scan] saved job ${email.id} to DB`);
+          if (status === 'skipped') {
+            console.log(`✅ [scan] Saved as SKIPPED (ID: ${email.id})`);
+          } else {
+            console.log(`💾 [scan] saved job ${email.id} to DB`);
+          }
         } catch (dbError) {
           console.error(`❌ [scan] save to DB failed for ${email.id}:`, dbError.message);
         }
