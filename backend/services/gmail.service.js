@@ -588,6 +588,7 @@ class GmailService {
       to: getHeader('To'),
       date: getHeader('Date'),
       internalDate: message.internalDate,
+      emailDate: message.internalDate ? new Date(parseInt(message.internalDate)) : new Date(), // Explicitly parsed date
       snippet: message.snippet,
       body: clippedBody,
       plainBodyLength: normalizedBody.length,

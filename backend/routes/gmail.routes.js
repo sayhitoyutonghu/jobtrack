@@ -576,7 +576,7 @@ router.get('/stream-scan', async (req, res) => {
               status: status,
               salary: classification.salary || 'Unknown',
               emailSnippet: classification.emailSnippet,
-              date: email.internalDate ? new Date(parseInt(email.internalDate)) : new Date(),
+              date: email.emailDate || new Date(), // Use the parsed date from service
               emailId: email.id,
               description: email.subject,
               category: classification.category || 'other'
@@ -584,7 +584,7 @@ router.get('/stream-scan', async (req, res) => {
             { upsert: true, new: true }
           );
 
-          console.log(`[DEBUG] Saved Job Date. ID: ${email.id}, InternalDate: ${email.internalDate}, Parsed: ${email.internalDate ? new Date(parseInt(email.internalDate)) : 'Now'}, Saved: ${savedJob.date}`);
+          console.log(`[DEBUG] Saved Job Date. ID: ${email.id}, EmailDate: ${email.emailDate}, Saved: ${savedJob.date}`);
 
           if (status === 'skipped') {
             console.log(`✅ [stream-scan] Saved as SKIPPED (ID: ${email.id})`);
