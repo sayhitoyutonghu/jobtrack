@@ -17,7 +17,7 @@ const CATEGORY_MAP = {
   ghost: 'Ghost'
 };
 
-const OPENAI_MODEL = process.env.OPENAI_MODEL || 'gpt-3.5-turbo';
+const OPENAI_MODEL = process.env.OPENAI_MODEL || 'gpt-4o-mini';
 const ANTHROPIC_MODEL = process.env.ANTHROPIC_MODEL || 'claude-3-opus-20240229';
 const OPENAI_TEMPERATURE = Number.isFinite(Number(process.env.OPENAI_TEMPERATURE))
   ? Number(process.env.OPENAI_TEMPERATURE)
@@ -83,57 +83,13 @@ class EmailClassifier {
 
   buildPrompt(email) {
     const safe = (value) => (value || '').toString().trim();
+    const subject = safe(email.subject);
     const body = safe(email.body);
-    const trimmedBody = body.length > 2000 ? `${body.slice(0, 2000)}...` : body;
+    const combinedText = `Subject: ${subject}\n\n${body}`;
+    // Truncate to avoid token limits (gpt-4o-mini has 128k context but good practice to limit input)
+    const truncatedText = combinedText.length > 15000 ? combinedText.slice(0, 15000) : combinedText;
 
-    return `You are an expert email analyzer for job applications.
-Analyze the email and extract key details into a JSON object.
-
-Categories:
-- application: You ACTUALLY applied to a job and received confirmation (e.g., "Application received", "Thank you for applying")
-  ❌ NOT: Job alerts, job recommendations, "jobs for you", newsletters
-  ✅ Examples: "Your application to Google was received", "Thank you for applying to Software Engineer"
-  
-- interview: Interview invitation, scheduling, or confirmation
-  ✅ Examples: "Schedule an interview", "Interview invitation", "Available for interview?"
-  ❌ NOT: "Read our interview with CEO", "Interview tips", "New interview podcast"
-  
-- offer: Job offer or salary negotiation
-  ✅ Examples: "Job offer", "Offer letter", "We'd like to extend an offer"
-  
-- rejected: Explicit rejection
-  ✅ Examples: "Not moving forward", "Declined", "Unfortunately we won't be proceeding"
-  
-- ghost: No response for 30+ days (rare, only if explicitly analyzing old threads)
-  
-- other: Everything else including:
-  • Job alerts/recommendations ("Jobs for you", "New jobs in your area")
-  • Newsletters ("Weekly digest", "Career tips")
-  • Reminders ("Complete your application", "Finish your profile")
-  • Marketing emails
-
-Output Schema (JSON):
-{
-  "category": "application" | "interview" | "offer" | "rejected" | "ghost" | "other",
-  "confidence": 0-100 (how confident you are in this classification),
-  "company": "Company Name" (or "Unknown"),
-  "role": "Job Title" (or "Unknown"),
-  "salary": "Salary/Rate" (or "Unknown"),
-  "summary": "Brief 1-sentence summary"
-}
-
-Instructions:
-1. Extract **Company Name** from sender or email body.
-2. Extract **Job Title/Role** if mentioned.
-3. Extract **Salary** if mentioned (e.g., "$100k-$120k", "$80/hr").
-4. Classify based on the STRONGEST signal (e.g., "Interview" > "Application").
-5. **CRITICAL**: Distinguish job alerts from actual applications - if it's promoting jobs, it's "other".
-6. Set confidence 80-100 if very clear, 50-79 if somewhat clear, 0-49 if uncertain.
-7. Return ONLY the JSON object. No markdown formatting.
-
-Email to classify:
-Subject: "${safe(email.subject)}"
-Body: "${trimmedBody}"`;
+    return truncatedText;
   }
 
   parseCategory(rawText) {
@@ -255,13 +211,32 @@ Body: "${trimmedBody}"`;
       const completion = await this.openai.chat.completions.create({
         model: OPENAI_MODEL,
         messages: [
-          { role: 'system', content: 'You must output valid JSON.' },
+          {
+            role: 'system',
+            content: `You are a recruiter assistant. Extract job details from the email.
+          Return a JSON object strictly with these fields:
+          - category: "application" (for applied/confirmation), "interview", "offer", "rejected", or "other" (job alerts/spam).
+          - company: (string, name of the main company or "Multiple")
+          - role: (string, job title)
+          - salary: (string, found salary range or "Unknown")
+          - summary: (string, 15 words max summary)
+          - confidence: (number, 0-100)
+
+          If it is a newsletter, promotional email, or spam, set category to "other" and confidence to 0.
+          IMPORTANT: You must return valid JSON.`
+          },
           { role: 'user', content: prompt }
         ],
-        max_tokens: 300,
-        temperature: OPENAI_TEMPERATURE,
+        // max_tokens: 300, // Let model decide often better, or keep it high
+        temperature: 0.3,
         response_format: { type: "json_object" }
       });
+
+      // Check if filtered
+      if (completion.choices[0].finish_reason === 'content_filter') {
+        console.error('[AI] OpenAI refused content due to safety filters.');
+        return null;
+      }
 
       console.log("[AI Raw Response]:", completion.choices[0]?.message?.content);
 
@@ -275,7 +250,10 @@ Body: "${trimmedBody}"`;
         rawResponse: completion
       });
     } catch (error) {
-      console.error("[AI] OpenAI Error Details:", error.response ? error.response.data : error.message);
+      console.error("[AI] OpenAI Failed:", error.message);
+      if (error.response) {
+        console.error('[AI] Error Details:', error.response.data);
+      }
       return null;
     }
   }
