@@ -27,12 +27,10 @@ class EmailClassifier {
   constructor(options = {}) {
     this.useOpenAI = false;
     this.useAnthropic = false;
-    this.useGemini = false;
 
     const {
       openaiApiKey = process.env.OPENAI_API_KEY,
       anthropicApiKey = process.env.ANTHROPIC_API_KEY,
-      geminiApiKey = process.env.GEMINI_API_KEY,
       enableAI = true
     } = options;
 
@@ -47,17 +45,7 @@ class EmailClassifier {
       }
     }
 
-    if (enableAI && geminiApiKey && geminiApiKey !== 'your-gemini-key') {
-      try {
-        const { GoogleGenerativeAI } = require("@google/generative-ai");
-        this.genAI = new GoogleGenerativeAI(geminiApiKey);
-        this.geminiModel = this.genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
-        this.useGemini = true;
-        console.log('✓ Gemini classification enabled');
-      } catch (error) {
-        console.error('⚠ Failed to initialize Gemini SDK:', error.message);
-      }
-    }
+
 
     if (enableAI && !this.useOpenAI && anthropicApiKey && anthropicApiKey !== 'sk-ant-your-key-here') {
       try {
@@ -72,7 +60,7 @@ class EmailClassifier {
 
     // Only log if we EXPECTED AI to be enabled/it was requested but failed
     // If the instance was created with enableAI: false (e.g. detailed scan), don't log warning.
-    if (this.enableAI && !this.useOpenAI && !this.useAnthropic && !this.useGemini) {
+    if (this.enableAI && !this.useOpenAI && !this.useAnthropic) {
       console.log('⚠ AI disabled (no valid API key provided)');
     }
   }
@@ -324,29 +312,7 @@ Body: "${trimmedBody}"`;
   }
 
 
-  async classifyWithGemini(prompt) {
-    if (!this.useGemini) return null;
 
-    console.log('[AI] Calling Gemini...');
-    try {
-      const result = await this.geminiModel.generateContent(prompt);
-      const response = await result.response;
-      const text = response.text();
-
-      const category = this.parseCategory(text);
-      if (!category) {
-        console.warn('[classifier][gemini] Invalid category:', text);
-        return null;
-      }
-
-      return this.createResult(category, 'medium', 'gemini-ai', {
-        rawResponse: text
-      });
-    } catch (error) {
-      console.error('Gemini classification failed:', error.message);
-      return null;
-    }
-  }
 
   /**
    * Check if this is a LinkedIn Job Alert email
@@ -546,7 +512,8 @@ Body: "${trimmedBody}"`;
     }
 
     // ========== AI PRIMARY CLASSIFICATION with FALLBACK ==========
-    const hasAI = this.useOpenAI || this.useGemini || this.useAnthropic;
+    // ========== AI PRIMARY CLASSIFICATION with FALLBACK ==========
+    const hasAI = this.useOpenAI || this.useAnthropic;
 
     if (!hasAI) {
       console.warn('⚠ No AI available, falling back to rule-based classification');
@@ -558,26 +525,9 @@ Body: "${trimmedBody}"`;
     let primaryModel = null;
     const aiModelsUsed = [];
 
-    // Step 1: Try Gemini (Primary)
-    if (this.useGemini) {
-      console.log('[AI] Classifying with Gemini (Primary)...');
-      primaryResult = await this.classifyWithGemini(prompt);
-      if (primaryResult) {
-        if (primaryResult.isSkip) {
-          console.log('⏭️  Skipping email (Category: Other/Promo)');
-          await cache.set(cacheKey, null, 60 * 60 * 1000);
-          return null;
-        }
-        primaryModel = 'gemini';
-        aiModelsUsed.push('gemini');
-      } else {
-        console.log('⚠️ Gemini failed or returned null, switching to OpenAI...');
-      }
-    }
-
-    // Step 2: Try OpenAI (Fallback)
-    if (!primaryResult && this.useOpenAI) {
-      console.log('[AI] Calling OpenAI (Fallback)...');
+    // Step 1: Try OpenAI (Primary)
+    if (this.useOpenAI) {
+      console.log('[AI] Classifying with OpenAI...');
       primaryResult = await this.classifyWithOpenAI(prompt);
       if (primaryResult) {
         if (primaryResult.isSkip) {
@@ -587,13 +537,21 @@ Body: "${trimmedBody}"`;
         }
         primaryModel = 'openai';
         aiModelsUsed.push('openai');
+      } else {
+        console.log('⚠️ OpenAI failed, attempting fallback...');
       }
     }
 
-    // Step 3: Try Anthropic (Last Resort)
+    // Step 2: Try Anthropic (Fallback)
     if (!primaryResult && this.useAnthropic) {
+      console.log('[AI] Calling Anthropic (Fallback)...');
       primaryResult = await this.classifyWithAnthropic(prompt);
       if (primaryResult) {
+        if (primaryResult.isSkip) {
+          console.log('⏭️  Skipping email (Category: Other/Promo)');
+          await cache.set(cacheKey, null, 60 * 60 * 1000);
+          return null;
+        }
         primaryModel = 'anthropic';
         aiModelsUsed.push('anthropic');
       }
