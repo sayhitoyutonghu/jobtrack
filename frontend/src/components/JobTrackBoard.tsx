@@ -514,13 +514,24 @@ const JobDetailsModal = ({ job, onClose, onDelete, onSave }: { job: Job; onClose
 
                 {/* Header Section */}
                 <div className="mb-8">
-                    <div className="inline-block bg-black text-white px-3 py-1 text-sm font-mono mb-4">
-                        {job.date ? new Date(job.date).toLocaleDateString('en-US', {
-                            year: 'numeric',
-                            month: 'short',
-                            day: 'numeric'
-                        }) : 'Date Unknown'}
-                    </div>
+                    {isEditing ? (
+                        <div className="inline-block mb-4">
+                            <input
+                                type="date"
+                                value={editedJob.date ? new Date(editedJob.date).toISOString().split('T')[0] : ''}
+                                onChange={(e) => handleChange('date', new Date(e.target.value).toISOString())}
+                                className="bg-black text-white px-3 py-1 text-sm font-mono border-2 border-transparent focus:border-blue-600 focus:outline-none"
+                            />
+                        </div>
+                    ) : (
+                        <div className="inline-block bg-black text-white px-3 py-1 text-sm font-mono mb-4">
+                            {job.date ? new Date(job.date).toLocaleDateString('en-US', {
+                                year: 'numeric',
+                                month: 'short',
+                                day: 'numeric'
+                            }) : 'Date Unknown'}
+                        </div>
+                    )}
                     {isEditing ? (
                         <input
                             type="text"
