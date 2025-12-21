@@ -621,7 +621,10 @@ router.get('/stream-scan', async (req, res) => {
       }
     }
 
-    sendEvent('complete', { stats, results: processedResults });
+    // 🔥 Filter out skipped/junk items from the final results list for cleaner UI
+    const cleanResults = processedResults.filter(item => item.status !== 'skipped');
+
+    sendEvent('complete', { stats, results: cleanResults });
     res.end();
 
   } catch (error) {
