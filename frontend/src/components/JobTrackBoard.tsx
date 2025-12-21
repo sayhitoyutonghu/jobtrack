@@ -518,8 +518,21 @@ const JobDetailsModal = ({ job, onClose, onDelete, onSave }: { job: Job; onClose
                         <div className="inline-block mb-4">
                             <input
                                 type="date"
-                                value={editedJob.date ? new Date(editedJob.date).toISOString().split('T')[0] : ''}
-                                onChange={(e) => handleChange('date', new Date(e.target.value).toISOString())}
+                                value={(() => {
+                                    if (!editedJob.date) return '';
+                                    const d = new Date(editedJob.date);
+                                    const year = d.getFullYear();
+                                    const month = String(d.getMonth() + 1).padStart(2, '0');
+                                    const day = String(d.getDate()).padStart(2, '0');
+                                    return `${year}-${month}-${day}`;
+                                })()}
+                                onChange={(e) => {
+                                    if (!e.target.value) return;
+                                    const [y, m, d] = e.target.value.split('-').map(Number);
+                                    // Construct date in local time (00:00:00)
+                                    const date = new Date(y, m - 1, d);
+                                    handleChange('date', date.toISOString());
+                                }}
                                 className="bg-black text-white px-3 py-1 text-sm font-mono border-2 border-transparent focus:border-blue-600 focus:outline-none"
                             />
                         </div>
