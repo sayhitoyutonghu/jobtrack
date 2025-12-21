@@ -207,29 +207,27 @@ class EmailClassifier {
   async classifyWithOpenAI(prompt) {
     if (!this.openai) return null;
 
+    console.log('[AI] Classifying with OpenAI (gpt-4o-mini)...');
+
     try {
       const completion = await this.openai.chat.completions.create({
-        model: OPENAI_MODEL,
+        model: "gpt-4o-mini", // 🔥 Hardcoded to mini as requested
         messages: [
           {
-            role: 'system',
-            content: `You are a recruiter assistant. Extract job details from the email.
-          Return a JSON object strictly with these fields:
-          - category: "application" (for applied/confirmation), "interview", "offer", "rejected", or "other" (job alerts/spam).
-          - company: (string, name of the main company or "Multiple")
-          - role: (string, job title)
-          - salary: (string, found salary range or "Unknown")
-          - summary: (string, 15 words max summary)
+            role: "system",
+            content: `You are a recruiter assistant. Analyze the email:
+          - category: "application_update" (applied/confirmed), "interview", "offer", "rejection", "job_alert" (newsletters), "other" (spam).
+          - company: (string)
+          - position: (string)
           - confidence: (number, 0-100)
-
-          If it is a newsletter, promotional email, or spam, set category to "other" and confidence to 0.
-          IMPORTANT: You must return valid JSON.`
+          
+          If category is "job_alert" or "other", confidence MUST be 0.
+          Return JSON.`
           },
-          { role: 'user', content: prompt }
+          { role: "user", content: prompt }
         ],
-        // max_tokens: 300, // Let model decide often better, or keep it high
-        temperature: 0.3,
-        response_format: { type: "json_object" }
+        response_format: { type: "json_object" },
+        temperature: 0.1,
       });
 
       // Check if filtered
@@ -238,17 +236,43 @@ class EmailClassifier {
         return null;
       }
 
-      console.log("[AI Raw Response]:", completion.choices[0]?.message?.content);
+      const content = completion.choices[0].message.content;
+      console.log(`[AI Raw Response]: ${content}`);
 
-      const category = this.parseCategory(completion.choices[0]?.message?.content);
-      if (!category) {
-        console.warn('[classifier][openai] Invalid category. Full response:', JSON.stringify(completion, null, 2));
+      let result;
+      try {
+        result = JSON.parse(content);
+      } catch (e) {
+        console.warn('[AI] Failed to parse JSON response');
         return null;
       }
 
-      return this.createResult(category, 'medium', 'openai-ai', {
-        rawResponse: completion
-      });
+      console.log(`✅ [AI] Success: ${result.company} - ${result.category}`);
+
+      // Map new categories to system labels
+      // System labels: Application, Interview, Offer, Rejected, Ghost
+      let systemLabel = 'Other';
+      const cat = (result.category || '').toLowerCase();
+
+      if (cat === 'application_update') systemLabel = 'Application';
+      else if (cat === 'interview') systemLabel = 'Interview';
+      else if (cat === 'offer') systemLabel = 'Offer';
+      else if (cat === 'rejection') systemLabel = 'Rejected';
+      else {
+        // job_alert, other, or unknown -> Skip
+        return { isSkip: true, reason: `Category: ${cat}` };
+      }
+
+      return {
+        label: systemLabel,
+        company: result.company || 'Unknown',
+        role: result.position || 'Unknown', // mapped from position
+        salary: 'Unknown', // Prompt didn't ask for salary specifically in user's snippet, setting unknown
+        summary: '',
+        confidence: result.confidence >= 80 ? 'high' : 'medium',
+        method: 'openai-gpt-4o-mini'
+      };
+
     } catch (error) {
       console.error("[AI] OpenAI Failed:", error.message);
       if (error.response) {
@@ -509,9 +533,11 @@ class EmailClassifier {
       primaryResult = await this.classifyWithOpenAI(prompt);
       if (primaryResult) {
         if (primaryResult.isSkip) {
-          console.log('⏭️  Skipping email (Category: Other/Promo)');
-          await cache.set(cacheKey, null, 60 * 60 * 1000);
-          return null;
+          console.log('⏭️  Skipping email (Category: Other/Promo) - WILL PERSIST AS SKIPPED');
+          primaryResult.label = 'Other';
+          primaryResult.company = 'Unknown';
+          primaryResult.role = 'Unknown';
+          // Do not return null, return the skip result so caller can save it
         }
         primaryModel = 'openai';
         aiModelsUsed.push('openai');
@@ -526,9 +552,10 @@ class EmailClassifier {
       primaryResult = await this.classifyWithAnthropic(prompt);
       if (primaryResult) {
         if (primaryResult.isSkip) {
-          console.log('⏭️  Skipping email (Category: Other/Promo)');
-          await cache.set(cacheKey, null, 60 * 60 * 1000);
-          return null;
+          console.log('⏭️  Skipping email (Category: Other/Promo) - WILL PERSIST AS SKIPPED');
+          primaryResult.label = 'Other';
+          primaryResult.company = 'Unknown';
+          primaryResult.role = 'Unknown';
         }
         primaryModel = 'anthropic';
         aiModelsUsed.push('anthropic');

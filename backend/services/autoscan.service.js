@@ -22,7 +22,7 @@ class AutoScanService {
     });
   }
 
-  start(sessionId, query = 'in:anywhere newer_than:2d', maxResults = 20) {
+  start(sessionId, query = 'in:inbox newer_than:7d -from:linkedin -subject:"jobs that match"', maxResults = 20) {
     if (this.timers.has(sessionId)) {
       console.log(`[autoscan] session ${sessionId} already running`);
       return { running: true };
@@ -95,10 +95,13 @@ class AutoScanService {
               continue;
             }
 
-            await gmail.applyLabelToThread(email.threadId, cls.label, false);
-            console.log(`[autoscan] job labeled ${email.id} -> ${cls.label}`);
+            // If it is NOT a skip (valid job), apply label in Gmail
+            if (!cls.isSkip) {
+              await gmail.applyLabelToThread(email.threadId, cls.label, false);
+              console.log(`[autoscan] job labeled ${email.id} -> ${cls.label}`);
+            }
 
-            // Save to MongoDB
+            // Save to MongoDB (ALL results including skips)
             try {
               const userEmail = await gmail.getUserEmail();
 
@@ -110,22 +113,32 @@ class AutoScanService {
                 'Ghost': 'Rejected'
               };
 
+              let status = STATUS_MAP[cls.label] || 'Applied';
+              // CRITICAL: If skip/junk, mark as skipped so frontend hides it but DB persists it
+              if (cls.isSkip || cls.label === 'Other') {
+                status = 'skipped';
+              }
+
               await Job.findOneAndUpdate(
                 { emailId: email.id },
                 {
                   userId: userEmail,
                   company: cls.company || 'Unknown Company',
                   role: cls.role || 'Unknown Role',
-                  status: STATUS_MAP[cls.label] || 'Applied',
+                  status: status,
                   salary: cls.salary || 'Unknown',
                   location: cls.location || 'Unknown',
                   date: email.internalDate ? new Date(parseInt(email.internalDate)) : new Date(),
                   emailSnippet: cls.emailSnippet || email.snippet,
-                  description: email.subject, // Keep description as subject for now, or use snippet
-                  emailId: email.id
+                  description: email.subject,
+                  emailId: email.id,
+                  category: cls.category || 'other' // Save raw category
                 },
                 { upsert: true, new: true }
               );
+              if (status === 'skipped') {
+                console.log(`✅ [autoscan] Saved as SKIPPED (ID: ${email.id}) - AI won't scan this again.`);
+              }
             } catch (dbError) {
               console.error(`[autoscan] failed to save job to DB: ${dbError.message}`);
             }
@@ -234,7 +247,7 @@ class AutoScanService {
   }
 
   // 立即执行一次扫描
-  async runNow(sessionId, query = 'in:anywhere newer_than:2d', maxResults = 20) {
+  async runNow(sessionId, query = 'in:inbox newer_than:7d -from:linkedin -subject:"jobs that match"', maxResults = 20) {
     try {
       const session = this.resolveSession(sessionId);
       if (!session) {
@@ -295,13 +308,16 @@ class AutoScanService {
             continue;
           }
 
-          await gmail.applyLabelToThread(email.threadId, cls.label, false);
+          if (!cls.isSkip) {
+            await gmail.applyLabelToThread(email.threadId, cls.label, false);
+          }
           processedCount++;
           results.push({
             id: email.id,
             subject: email.subject,
             label: cls.label,
-            confidence: cls.confidence
+            confidence: cls.confidence,
+            skipped: cls.isSkip
           });
 
           // Save to MongoDB
@@ -313,6 +329,10 @@ class AutoScanService {
             if (cls.label === 'Interview') status = 'Interviewing';
             else if (cls.label === 'Offer') status = 'Offer';
             else if (cls.label === 'Rejected') status = 'Rejected';
+
+            if (cls.isSkip || cls.label === 'Other') {
+              status = 'skipped';
+            }
 
             await Job.findOneAndUpdate(
               { emailId: email.id },
@@ -326,10 +346,14 @@ class AutoScanService {
                 date: email.internalDate ? new Date(parseInt(email.internalDate)) : new Date(),
                 emailSnippet: email.snippet,
                 description: email.subject,
-                emailId: email.id
+                emailId: email.id,
+                category: cls.category || 'other'
               },
               { upsert: true, new: true }
             );
+            if (status === 'skipped') {
+              console.log(`✅ [autoscan] runNow Saved as SKIPPED (ID: ${email.id})`);
+            }
           } catch (dbError) {
             console.error(`[autoscan] failed to save job to DB: ${dbError.message}`);
           }
