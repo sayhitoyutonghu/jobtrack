@@ -571,11 +571,15 @@ class EmailClassifier {
     // Ghost Job / Invalid Data Check
     // If we have a result but strictly missing Company or Role, reject it.
     // This allows the caller to treat it as "skipped" rather than saving "Unknown" data.
-    if (!primaryResult.company || primaryResult.company === 'Unknown' ||
-      !primaryResult.role || primaryResult.role === 'Unknown') {
-      if (primaryResult.label !== 'Rejected') { // Allow "Rejected" emails to be vague
-        console.warn(`👻 [Ghost Job] Skipped due to missing data (Company: ${primaryResult.company}, Role: ${primaryResult.role})`);
-        return null;
+    // EXCEPTION: If it is explicitly marked as "isSkip" (spam/junk), we allow it to pass so we can
+    // persist it in the DB as "skipped" to prevent re-scanning.
+    if (!primaryResult.isSkip) {
+      if (!primaryResult.company || primaryResult.company === 'Unknown' ||
+        !primaryResult.role || primaryResult.role === 'Unknown') {
+        if (primaryResult.label !== 'Rejected') { // Allow "Rejected" emails to be vague
+          console.warn(`👻 [Ghost Job] Skipped due to missing data (Company: ${primaryResult.company}, Role: ${primaryResult.role})`);
+          return null;
+        }
       }
     }
 

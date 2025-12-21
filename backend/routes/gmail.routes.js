@@ -300,41 +300,57 @@ router.get('/deep-stream-scan', async (req, res) => {
           }
 
           // 6. Action
-          await gmailService.applyLabelToThread(email.threadId, classification.label, classification.config.moveToFolder);
+          if (!classification.isSkip) {
+            await gmailService.applyLabelToThread(email.threadId, classification.label, classification.config.moveToFolder);
+          }
 
           // DB Save
           const STATUS_MAP = { 'Application': 'Applied', 'Interview': 'Interviewing', 'Offer': 'Offer', 'Rejected': 'Rejected' };
 
-          // Validate before saving
-          if (!classification.company || classification.company === 'Unknown' || !classification.role || classification.role === 'Unknown') {
-            console.log(`👻 [deep-scan] Skipping ghost job (missing metadata): ${email.subject}`);
-            stats.skipped++;
-            await seenCache.set(message.id, { skipped: 'missing-metadata', at: Date.now() });
-            continue;
+          let status = STATUS_MAP[classification.label] || 'Applied';
+          if (classification.isSkip || classification.label === 'Other') {
+            status = 'skipped';
           }
 
-          if (classification.company && classification.company !== 'Unknown') {
+          // Validate before saving (Ghost Job Check) - ONLY for valid jobs
+          if (status !== 'skipped') {
+            if (!classification.company || classification.company === 'Unknown' || !classification.role || classification.role === 'Unknown') {
+              console.log(`👻 [deep-scan] Skipping ghost job (missing metadata): ${email.subject}`);
+              stats.skipped++;
+              await seenCache.set(message.id, { skipped: 'missing-metadata', at: Date.now() });
+              continue;
+            }
+          }
+
+          const resolvedCompany = (status === 'skipped' && (!classification.company || classification.company === 'Unknown')) ? 'Junk Filter' : classification.company;
+          const resolvedRole = (status === 'skipped' && (!classification.role || classification.role === 'Unknown')) ? 'Skipped Email' : (classification.role || 'Unknown');
+
+          if (resolvedCompany && resolvedCompany !== 'Unknown') {
             const savedJob = await Job.findOneAndUpdate(
               { emailId: email.id },
               {
                 userId: await gmailService.getUserEmail(),
-                company: classification.company,
-                role: classification.role || 'Unknown',
-                status: STATUS_MAP[classification.label] || 'Applied',
+                company: resolvedCompany,
+                role: resolvedRole,
+                status: status,
                 date: email.internalDate ? new Date(parseInt(email.internalDate)) : new Date(),
                 description: email.subject,
-                emailId: email.id
+                emailId: email.id,
+                category: classification.category || 'other'
               },
               { upsert: true, new: true }
             );
+            if (status === 'skipped') {
+              console.log(`✅ [deep-scan] Saved as SKIPPED (ID: ${email.id})`);
+            }
           }
 
           stats.processed++;
           sendEvent('progress', {
             percent: progress,
             type: 'match',
-            job: { company: classification.company, role: classification.role, status: classification.label },
-            log: `✅ Classified: ${classification.company} - ${classification.role}`
+            job: { company: resolvedCompany, role: resolvedRole, status: status },
+            log: `✅ Classified: ${resolvedCompany} - ${resolvedRole} (${status})`
           });
 
           await seenCache.set(message.id, { labeled: classification.label, method: 'ai', at: Date.now() });
@@ -517,7 +533,9 @@ router.get('/stream-scan', async (req, res) => {
           await seenCache.set(message.id, { skipped: 'no-match', at: Date.now() });
         } else {
           // Success!
-          await gmailService.applyLabelToThread(email.threadId, classification.label, classification.config.moveToFolder);
+          if (!classification.isSkip) {
+            await gmailService.applyLabelToThread(email.threadId, classification.label, classification.config.moveToFolder);
+          }
 
           // Save DB
           const STATUS_MAP = {
@@ -525,33 +543,49 @@ router.get('/stream-scan', async (req, res) => {
             'Offer': 'Offer', 'Rejected': 'Rejected', 'Ghost': 'Rejected'
           };
 
+          let status = STATUS_MAP[classification.label] || 'Applied';
+          if (classification.isSkip || classification.label === 'Other') {
+            status = 'skipped';
+          }
+
           // ... DB Saving Logic ...
           const userEmail = await gmailService.getUserEmail();
 
           // Prevent "Ghost" Jobs: Check for missing metadata
-          if (!classification.company || classification.company === 'Unknown' || !classification.role || classification.role === 'Unknown') {
-            console.log(`👻 [scan] Skipping ghost job (missing metadata): ${email.subject}`);
-            stats.skipped++;
-            sendEvent('progress', { percent: progress, type: 'skipped', reason: 'Missing Metadata', subject: email.subject });
-            await seenCache.set(message.id, { skipped: 'missing-metadata', at: Date.now() });
-            continue;
+          // ONLY ENFORCE THIS IF IT IS A REAL JOB (not skipped)
+          if (status !== 'skipped') {
+            if (!classification.company || classification.company === 'Unknown' || !classification.role || classification.role === 'Unknown') {
+              console.log(`👻 [scan] Skipping ghost job (missing metadata): ${email.subject}`);
+              stats.skipped++;
+              sendEvent('progress', { percent: progress, type: 'skipped', reason: 'Missing Metadata', subject: email.subject });
+              await seenCache.set(message.id, { skipped: 'missing-metadata', at: Date.now() });
+              continue;
+            }
           }
+
+          const resolvedCompany = (status === 'skipped' && (!classification.company || classification.company === 'Unknown')) ? 'Junk Filter' : (classification.company || 'Unknown');
+          const resolvedRole = (status === 'skipped' && (!classification.role || classification.role === 'Unknown')) ? 'Skipped Email' : (classification.role || 'Unknown');
 
           const savedJob = await Job.findOneAndUpdate(
             { emailId: email.id },
             {
               userId: userEmail,
-              company: classification.company || 'Unknown',
-              role: classification.role || 'Unknown',
-              status: STATUS_MAP[classification.label] || 'Applied',
+              company: resolvedCompany,
+              role: resolvedRole,
+              status: status,
               salary: classification.salary || 'Unknown',
               emailSnippet: classification.emailSnippet,
               date: email.internalDate ? new Date(parseInt(email.internalDate)) : new Date(),
               emailId: email.id,
-              description: email.subject
+              description: email.subject,
+              category: classification.category || 'other'
             },
             { upsert: true, new: true }
           );
+
+          if (status === 'skipped') {
+            console.log(`✅ [stream-scan] Saved as SKIPPED (ID: ${email.id})`);
+          }
 
           stats.processed++;
           const jobData = {
