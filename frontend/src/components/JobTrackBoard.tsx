@@ -401,7 +401,7 @@ const TrashBin = ({ count, onClick }: { count: number; onClick: () => void }) =>
 /**
  * Trash Review Modal
  */
-const TrashReviewModal = ({ jobs, onClose, onRestore, onDeletePermanent }: { jobs: Job[]; onClose: () => void; onRestore: (job: Job) => void; onDeletePermanent: (jobId: string) => void }) => {
+const TrashReviewModal = ({ jobs, onClose, onRestore, onDeletePermanent, onEmptyTrash }: { jobs: Job[]; onClose: () => void; onRestore: (job: Job) => void; onDeletePermanent: (jobId: string) => void; onEmptyTrash: () => void }) => {
     return (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm" onClick={onClose}>
             <div
@@ -451,8 +451,18 @@ const TrashReviewModal = ({ jobs, onClose, onRestore, onDeletePermanent }: { job
                     )}
                 </div>
 
-                <div className="p-4 border-t-2 border-black bg-zinc-50 text-xs font-mono text-center opacity-60">
-                    ITEMS IN TRASH ARE NOT AUTOMATICALLY DELETED (YET).
+                <div className="p-4 border-t-2 border-black bg-zinc-50 flex justify-between items-center">
+                    <div className="text-xs font-mono opacity-60">
+                        ITEMS IN TRASH ARE NOT AUTOMATICALLY DELETED (YET).
+                    </div>
+                    {jobs.length > 0 && (
+                        <button
+                            onClick={onEmptyTrash}
+                            className="px-4 py-2 bg-red-600 text-white border-2 border-black font-bold uppercase text-xs hover:bg-red-700 transition-colors shadow-[2px_2px_0px_0px_rgba(0,0,0,0.3)] hover:shadow-[1px_1px_0px_0px_rgba(0,0,0,0.3)] hover:translate-y-0.5"
+                        >
+                            🗑️ EMPTY TRASH
+                        </button>
+                    )}
                 </div>
             </div>
         </div>
@@ -1128,6 +1138,26 @@ export default function JobTrackBoard({ isAuthenticated }: JobTrackBoardProps) {
         }
     };
 
+    const handleEmptyTrash = async () => {
+        if (!confirm(`Are you sure you want to permanently delete all ${trashedJobs.length} items in trash? This cannot be undone.`)) return;
+
+        try {
+            if (!isDemoMode) {
+                // Delete all trashed jobs permanently
+                await Promise.all(trashedJobs.map(job => jobsApi.deletePermanent(job.id)));
+            }
+
+            // Clear trash locally
+            setTrashedJobs([]);
+            setScanMessage(`Permanently deleted ${trashedJobs.length} items`);
+            setTimeout(() => setScanMessage(null), 3000);
+        } catch (error) {
+            console.error("Failed to empty trash:", error);
+            setScanMessage("❌ Failed to empty trash");
+            setTimeout(() => setScanMessage(null), 3000);
+        }
+    };
+
     const handleDemoLoad = () => {
         setIsDemoMode(true);
         setJobs(FALLBACK_DATA);
@@ -1447,6 +1477,7 @@ export default function JobTrackBoard({ isAuthenticated }: JobTrackBoardProps) {
                     onClose={() => setIsTrashOpen(false)}
                     onRestore={handleRestoreJob}
                     onDeletePermanent={handlePermanentDeleteJob}
+                    onEmptyTrash={handleEmptyTrash}
                 />
             )}
 
