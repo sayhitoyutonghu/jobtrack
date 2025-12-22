@@ -455,6 +455,14 @@ router.get('/stream-scan', async (req, res) => {
         const seen = await seenCache.get(message.id);
         if (seen) {
           stats.skipped++;
+          const skippedData = {
+            id: message.id,
+            subject: "Unknown (Cached)", // We might not have the subject if it's just an ID check
+            status: 'skipped',
+            reason: 'Already Seen'
+          };
+          processedResults.push(skippedData);
+
           sendEvent('progress', {
             percent: progress,
             type: 'skipped',
@@ -467,6 +475,14 @@ router.get('/stream-scan', async (req, res) => {
         const email = await gmailService.getEmail(message.id);
         if (!email.body || email.body.length === 0) {
           stats.skipped++;
+          const skippedData = {
+            id: message.id,
+            subject: email.subject || "No Subject",
+            status: 'skipped',
+            reason: 'Empty Body'
+          };
+          processedResults.push(skippedData);
+
           sendEvent('progress', { percent: progress, type: 'skipped', reason: 'Empty Body', subject: email.subject });
           continue;
         }
@@ -477,6 +493,16 @@ router.get('/stream-scan', async (req, res) => {
           stats.skipped++;
           // Keep in cache so we don't even hit DB next time if possible, but DB is the source of truth
           await seenCache.set(message.id, { labeled: existingJob.status || 'Applied', method: 'db-existing', at: Date.now() });
+
+          const skippedData = {
+            id: message.id,
+            subject: email.subject,
+            company: existingJob.company,
+            role: existingJob.role,
+            status: 'skipped',
+            reason: 'Already in DB'
+          };
+          processedResults.push(skippedData);
 
           sendEvent('progress', {
             percent: progress,
@@ -514,6 +540,15 @@ router.get('/stream-scan', async (req, res) => {
         if (!clfNoAI.isJobRelated(email)) {
           const reason = clfNoAI.isFinanceReceipt && clfNoAI.isFinanceReceipt(email) ? 'Receipt' : 'Not Job Related';
           stats.skipped++;
+
+          const skippedData = {
+            id: message.id,
+            subject: email.subject,
+            status: 'skipped',
+            reason: reason
+          };
+          processedResults.push(skippedData);
+
           sendEvent('progress', { percent: progress, type: 'skipped', reason: reason, subject: email.subject });
           await seenCache.set(message.id, { skipped: reason, at: Date.now() });
           continue;
@@ -530,6 +565,14 @@ router.get('/stream-scan', async (req, res) => {
 
         if (!classification) {
           stats.skipped++;
+          const skippedData = {
+            id: message.id,
+            subject: email.subject,
+            status: 'skipped',
+            reason: 'AI No Match'
+          };
+          processedResults.push(skippedData);
+
           sendEvent('progress', { percent: progress, type: 'skipped', reason: 'AI No Match', subject: email.subject });
           await seenCache.set(message.id, { skipped: 'no-match', at: Date.now() });
         } else {
@@ -558,6 +601,15 @@ router.get('/stream-scan', async (req, res) => {
             if (!classification.company || classification.company === 'Unknown' || !classification.role || classification.role === 'Unknown') {
               console.log(`👻 [scan] Skipping ghost job (missing metadata): ${email.subject}`);
               stats.skipped++;
+
+              const skippedData = {
+                id: message.id,
+                subject: email.subject,
+                status: 'skipped',
+                reason: 'Missing Metadata'
+              };
+              processedResults.push(skippedData);
+
               sendEvent('progress', { percent: progress, type: 'skipped', reason: 'Missing Metadata', subject: email.subject });
               await seenCache.set(message.id, { skipped: 'missing-metadata', at: Date.now() });
               continue;
@@ -598,7 +650,10 @@ router.get('/stream-scan', async (req, res) => {
             role: savedJob.role,
             status: savedJob.status,
             salary: savedJob.salary,
-            date: savedJob.date
+            date: savedJob.date,
+            // Include extra info for logs
+            subject: email.subject,
+            reason: status === 'skipped' ? (classification.category || 'Ignored') : 'AI Match'
           };
           processedResults.push(jobData);
 
@@ -618,11 +673,17 @@ router.get('/stream-scan', async (req, res) => {
       } catch (err) {
         console.error(`Error processing ${message.id}:`, err);
         sendEvent('log', { message: `❌ Error: ${err.message}` });
+        processedResults.push({
+          id: message.id,
+          subject: "Error Processing",
+          status: 'error',
+          reason: err.message
+        });
       }
     }
 
-    // 🔥 Filter out skipped/junk items from the final results list for cleaner UI
-    const cleanResults = processedResults.filter(item => item.status !== 'skipped');
+    // 🔥 Send ALL results, not just matched ones
+    const cleanResults = processedResults;
 
     sendEvent('complete', { stats, results: cleanResults });
     res.end();
