@@ -1096,7 +1096,12 @@ export default function JobTrackBoard({ isAuthenticated }: JobTrackBoardProps) {
             setTrashedJobs(prev => prev.filter(j => j.id !== job.id));
 
             // Add back to board (optimistic)
-            setJobs(prev => [job, ...prev]);
+            // If job status is "Trash", reset it to "Applied"
+            const restoredJob = {
+                ...job,
+                status: job.status === "Trash" ? "Applied" as Status : job.status
+            };
+            setJobs(prev => [restoredJob, ...prev]);
 
             // Refresh board to be sure
             // fetchJobs();
