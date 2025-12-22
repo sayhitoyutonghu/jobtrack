@@ -1022,6 +1022,7 @@ export default function JobTrackBoard({ isAuthenticated }: JobTrackBoardProps) {
     }, [savedJobs]);
 
     const handleStartDemo = () => {
+        setIsDemoMode(true);
         setJobs(MOCK_JOBS as unknown as Job[]);
     };
 
