@@ -680,17 +680,19 @@ router.get('/stream-scan', async (req, res) => {
           reason: err.message
         });
       }
-      // 🔄 Post-Scan Summary Calculation for Precise Reporting
-      // Because the loop above has complex branching, we aggregate the results here for the report
-      const summary = {
-        totalScanned: messages.length,
-        newJobs: processedResults.filter(r => r.status && r.status !== 'skipped' && r.status !== 'error').length,
-        newOthers: processedResults.filter(r => r.status === 'skipped' && r.reason !== 'Already Seen' && r.reason !== 'Already in Job DB' && r.reason !== 'Ignored (Blacklist)').length,
-        skipped: processedResults.filter(r => r.reason === 'Already Seen' || r.reason === 'Already in Job DB' || r.reason === 'Ignored (Blacklist)').length
-      };
+    }
 
-      // 📊 3. Print the requested Log
-      console.log(`
+    // 🔄 Post-Scan Summary Calculation for Precise Reporting
+    // Because the loop above has complex branching, we aggregate the results here for the report
+    const summary = {
+      totalScanned: messages.length,
+      newJobs: processedResults.filter(r => r.status && r.status !== 'skipped' && r.status !== 'error').length,
+      newOthers: processedResults.filter(r => r.status === 'skipped' && r.reason !== 'Already Seen' && r.reason !== 'Already in Job DB' && r.reason !== 'Ignored (Blacklist)').length,
+      skipped: processedResults.filter(r => r.reason === 'Already Seen' || r.reason === 'Already in Job DB' || r.reason === 'Ignored (Blacklist)').length
+    };
+
+    // 📊 3. Print the requested Log
+    console.log(`
 ━━━━━━━━━━━━━━━━ SCAN REPORT ━━━━━━━━━━━━━━━━
 📬 SCANNED (Total) : ${summary.totalScanned}
 ---------------------------------------------
@@ -700,20 +702,20 @@ router.get('/stream-scan', async (req, res) => {
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 `);
 
-      // 🔥 Send ALL results
-      const cleanResults = processedResults;
+    // 🔥 Send ALL results
+    const cleanResults = processedResults;
 
-      sendEvent('complete', { stats: summary, results: cleanResults });
-      res.end();
+    sendEvent('complete', { stats: summary, results: cleanResults });
+    res.end();
 
-    } catch (error) {
-      console.error('Stream scan error:', error);
-      sendEvent('error', { message: error.message || 'Unknown scan error' });
-      res.end();
-    } finally {
-      clearInterval(heartbeat);
-    }
-  });
+  } catch (error) {
+    console.error('Stream scan error:', error);
+    sendEvent('error', { message: error.message || 'Unknown scan error' });
+    res.end();
+  } finally {
+    clearInterval(heartbeat);
+  }
+});
 
 router.post('/scan', async (req, res) => {
   try {
