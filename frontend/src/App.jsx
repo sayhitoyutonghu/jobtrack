@@ -153,6 +153,15 @@ const MainApp = () => {
                 Currently in Private Beta. <br />
                 Sign in restricted to approved testers.
               </p>
+              <div className="mt-4 pt-4 border-t border-zinc-100">
+                <p className="text-xs text-zinc-500 mb-1">For access to the private beta, please contact:</p>
+                <a href="mailto:sayhitoyutonghu@gmail.com" className="block text-xs font-bold text-black hover:underline mb-2">
+                  sayhitoyutonghu@gmail.com
+                </a>
+                <p className="text-xs text-zinc-500">
+                  Or reach out on <a href="https://www.linkedin.com/in/yutong-hu-351133219/" target="_blank" rel="noopener noreferrer" className="font-bold text-black hover:underline">LinkedIn</a>
+                </p>
+              </div>
             </div>
           )}
         </div>
