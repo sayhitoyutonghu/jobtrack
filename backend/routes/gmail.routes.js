@@ -489,14 +489,14 @@ router.get('/stream-scan', async (req, res) => {
             id: message.id,
             subject: "Unknown (Cached)", // We might not have the subject if it's just an ID check
             status: 'skipped',
-            reason: 'Already Seen'
+            reason: 'Skipped - already in cache'
           };
           processedResults.push(skippedData);
 
           sendEvent('progress', {
             percent: progress,
             type: 'skipped',
-            reason: 'Already Seen',
+            reason: 'Skipped - already in cache',
             id: message.id
           });
           continue;
@@ -530,14 +530,14 @@ router.get('/stream-scan', async (req, res) => {
             company: existingJob.company,
             role: existingJob.role,
             status: 'skipped',
-            reason: 'Already in DB'
+            reason: 'Skipped - already in database'
           };
           processedResults.push(skippedData);
 
           sendEvent('progress', {
             percent: progress,
             type: 'skipped',
-            reason: 'Already in DB',
+            reason: 'Skipped - already in database',
             subject: email.subject
           });
           continue;
@@ -568,7 +568,7 @@ router.get('/stream-scan', async (req, res) => {
         // 2. Simple Job Check
         const clfNoAI = new ClassifierService({ enableAI: false });
         if (!clfNoAI.isJobRelated(email)) {
-          const reason = clfNoAI.isFinanceReceipt && clfNoAI.isFinanceReceipt(email) ? 'Receipt' : 'Not Job Related';
+          const reason = clfNoAI.isFinanceReceipt && clfNoAI.isFinanceReceipt(email) ? 'Skipped - receipt email' : 'Skipped - not job related';
           stats.skipped++;
 
           const skippedData = {
@@ -725,8 +725,8 @@ router.get('/stream-scan', async (req, res) => {
     const summary = {
       totalScanned: messages.length,
       newJobs: processedResults.filter(r => r.status && r.status !== 'skipped' && r.status !== 'error').length,
-      newOthers: processedResults.filter(r => r.status === 'skipped' && r.reason !== 'Already Seen' && r.reason !== 'Already in Job DB' && r.reason !== 'Ignored (Blacklist)').length,
-      skipped: processedResults.filter(r => r.reason === 'Already Seen' || r.reason === 'Already in Job DB' || r.reason === 'Ignored (Blacklist)').length
+      newOthers: processedResults.filter(r => r.status === 'skipped' && !r.reason.startsWith('Skipped -')).length,
+      skipped: processedResults.filter(r => r.reason && r.reason.startsWith('Skipped -')).length
     };
 
     // 📊 3. Print the requested Log
