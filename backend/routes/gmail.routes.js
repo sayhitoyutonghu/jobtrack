@@ -436,13 +436,13 @@ router.get('/stream-scan', async (req, res) => {
 
     // Detect if this is a monthly scan and convert to precise date query
     let finalQuery = query;
-    let isMonthlyS can = false;
+    let isMonthlyScan = false;
     let actualDateRange = '';
 
     // Check if query contains month_YYYY_MM pattern
     const monthMatch = query.match(/month_(\d{4})_(\d{1,2})/);
     if (monthMatch) {
-      isMonthlyS can = true;
+      isMonthlyScan = true;
       const year = parseInt(monthMatch[1]);
       const month = parseInt(monthMatch[2]);
 
@@ -462,7 +462,7 @@ router.get('/stream-scan', async (req, res) => {
     }
 
     // Step 1: Fetch IDs (with pagination for monthly scans)
-    const usePagination = isMonthlyS can || maxResults > 500;
+    const usePagination = isMonthlyScan || maxResults > 500;
     sendEvent('log', { message: usePagination ? `📄 Using pagination (up to ${maxResults} emails)...` : `📄 Fetching up to ${maxResults} emails...` });
 
     const messages = await gmailService.scanNewEmails(finalQuery, maxResults, usePagination);
