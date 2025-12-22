@@ -1361,16 +1361,6 @@ export default function JobTrackBoard({ isAuthenticated }: JobTrackBoardProps) {
                 </div>
                 <div className="flex gap-3">
                     <button
-                        onClick={handleDeepScan}
-                        disabled={isScanning}
-                        className={cn(
-                            "bg-purple-600 text-white px-6 py-3 font-bold uppercase tracking-wider border-2 border-black hover:bg-purple-700 hover:text-white transition-all shadow-[4px_4px_0px_0px_rgba(0,0,0,0.3)] hover:shadow-[2px_2px_0px_0px_rgba(0,0,0,0.3)] hover:translate-y-0.5 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2",
-                            isScanning && "bg-zinc-300 text-zinc-500 border-zinc-400"
-                        )}
-                    >
-                        {isScanning ? "..." : "DEEP SCAN (1 YR)"}
-                    </button>
-                    <button
                         onClick={handleScan}
                         disabled={isScanning}
                         className={cn(
