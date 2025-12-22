@@ -434,8 +434,38 @@ router.get('/stream-scan', async (req, res) => {
 
     sendEvent('log', { message: `🔍 Starting scan for "${query}" (limit: ${maxResults})...` });
 
-    // Step 1: Fetch IDs
-    const messages = await gmailService.scanNewEmails(query, maxResults);
+    // Detect if this is a monthly scan and convert to precise date query
+    let finalQuery = query;
+    let isMonthlyS can = false;
+    let actualDateRange = '';
+
+    // Check if query contains month_YYYY_MM pattern
+    const monthMatch = query.match(/month_(\d{4})_(\d{1,2})/);
+    if (monthMatch) {
+      isMonthlyS can = true;
+      const year = parseInt(monthMatch[1]);
+      const month = parseInt(monthMatch[2]);
+
+      const startDate = new Date(year, month - 1, 1);
+      const endDate = new Date(year, month, 1);
+
+      const format = (d) => `${d.getFullYear()}/${d.getMonth() + 1}/${d.getDate()}`;
+
+      // Extract source query if present
+      const sourceQuery = query.includes('in:inbox') ? 'in:inbox' : (query.includes('is:unread') ? 'is:unread' : 'in:anywhere');
+
+      finalQuery = `${sourceQuery} after:${format(startDate)} before:${format(endDate)}`;
+      actualDateRange = `${startDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })} - ${endDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}`;
+
+      sendEvent('log', { message: `📅 Monthly scan detected: ${actualDateRange}` });
+      sendEvent('log', { message: `🔍 Using query: ${finalQuery}` });
+    }
+
+    // Step 1: Fetch IDs (with pagination for monthly scans)
+    const usePagination = isMonthlyS can || maxResults > 500;
+    sendEvent('log', { message: usePagination ? `📄 Using pagination (up to ${maxResults} emails)...` : `📄 Fetching up to ${maxResults} emails...` });
+
+    const messages = await gmailService.scanNewEmails(finalQuery, maxResults, usePagination);
     sendEvent('log', { message: `📨 Found ${messages.length} potentially relevant emails.` });
 
     if (messages.length === 0) {
@@ -630,8 +660,16 @@ router.get('/stream-scan', async (req, res) => {
               emailSnippet: classification.emailSnippet,
               date: email.emailDate || new Date(), // Use the parsed date from service
               emailId: email.id,
+              threadId: email.threadId,
               description: email.subject,
-              category: classification.category || 'other'
+              category: classification.category || 'other',
+              rawClassification: {
+                method: classification.method,
+                confidence: classification.confidence,
+                category: classification.category,
+                label: classification.label,
+                timestamp: new Date()
+              }
             },
             { upsert: true, new: true }
           );
@@ -838,10 +876,16 @@ router.post('/scan', async (req, res) => {
           // Save valid skip to ignored
           await IgnoredEmail.create({
             emailId: message.id,
+            threadId: email.threadId,
             subject: email.subject,
             sender: email.from,
+            category: 'not_job_related',
+            company: 'Unknown',
+            position: 'Unknown',
             reason: reason,
-            date: new Date()
+            rawClassification: null,
+            date: email.emailDate || new Date(),
+            scannedAt: new Date()
           });
           junkCount++;
           results.push({ id: email.id, subject: email.subject, from: email.from, date: email.date, skipped: reason });
@@ -908,10 +952,22 @@ router.post('/scan', async (req, res) => {
             // 🗑️ Ignored
             await IgnoredEmail.create({
               emailId: email.id,
+              threadId: email.threadId,
               subject: classification.emailSnippet || email.subject,
               sender: email.from,
+              category: classification.category || 'other',
+              company: classification.company || 'Unknown',
+              position: classification.role || 'Unknown',
               reason: classification.category || 'other',
-              date: new Date()
+              rawClassification: {
+                method: classification.method,
+                confidence: classification.confidence,
+                category: classification.category,
+                label: classification.label,
+                timestamp: new Date()
+              },
+              date: email.emailDate || new Date(),
+              scannedAt: new Date()
             });
             junkCount++;
             console.log(`🗑️ [scan] Saved to Ignored List (ID: ${email.id})`);
@@ -935,10 +991,22 @@ router.post('/scan', async (req, res) => {
               junkCount++; // Count as junk if missing metadata
               await IgnoredEmail.create({
                 emailId: email.id,
+                threadId: email.threadId,
                 subject: email.subject,
                 sender: email.from,
+                category: classification.category || 'other',
+                company: classification.company || 'Unknown',
+                position: classification.role || 'Unknown',
                 reason: 'missing-metadata',
-                date: new Date()
+                rawClassification: {
+                  method: classification.method,
+                  confidence: classification.confidence,
+                  category: classification.category,
+                  label: classification.label,
+                  timestamp: new Date()
+                },
+                date: email.emailDate || new Date(),
+                scannedAt: new Date()
               });
               results.push({ id: email.id, skipped: 'missing-metadata' });
               continue;

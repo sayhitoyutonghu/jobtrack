@@ -597,16 +597,57 @@ class GmailService {
   }
 
   /**
-   * Scan for new emails
+   * Scan for new emails with optional pagination support
+   * @param {string} query - Gmail search query
+   * @param {number} maxResults - Maximum total results to fetch
+   * @param {boolean} usePagination - If true, fetches all pages up to maxResults
+   * @returns {Array} Array of message stubs
    */
-  async scanNewEmails(query = 'is:unread', maxResults = 50) {
-    const response = await this.gmail.users.messages.list({
-      userId: 'me',
-      q: query,
-      maxResults
-    });
+  async scanNewEmails(query = 'is:unread', maxResults = 50, usePagination = false) {
+    if (!usePagination) {
+      // Legacy behavior: single page
+      const response = await this.gmail.users.messages.list({
+        userId: 'me',
+        q: query,
+        maxResults
+      });
+      return response.data.messages || [];
+    }
 
-    return response.data.messages || [];
+    // New: Paginate until we hit maxResults or run out of pages
+    let allMessages = [];
+    let pageToken = null;
+    let pageCount = 0;
+
+    do {
+      pageCount++;
+      const batchSize = Math.min(500, maxResults - allMessages.length); // API's max per call is 500
+
+      console.log(`📄 Fetching page ${pageCount}, batch size: ${batchSize}`);
+
+      const response = await this.gmail.users.messages.list({
+        userId: 'me',
+        q: query,
+        maxResults: batchSize,
+        pageToken
+      });
+
+      const messages = response.data.messages || [];
+      allMessages = allMessages.concat(messages);
+      pageToken = response.data.nextPageToken;
+
+      console.log(`📧 Page ${pageCount}: Got ${messages.length} messages (Total: ${allMessages.length})`);
+
+      if (allMessages.length >= maxResults) break;
+      if (messages.length === 0) break; // No more messages
+
+      // Small delay to avoid rate limits
+      await this.sleep(100);
+
+    } while (pageToken);
+
+    console.log(`✅ Pagination complete: ${allMessages.length} total messages across ${pageCount} pages`);
+    return allMessages;
   }
 
   /**

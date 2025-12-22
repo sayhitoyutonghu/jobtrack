@@ -39,8 +39,19 @@ const JobSchema = new mongoose.Schema({
         unique: true,
         sparse: true // Allows null/undefined to not be unique, though we expect it to be present for scanned jobs
     },
+    threadId: {
+        type: String
+    },
     description: {
         type: String
+    },
+    category: {
+        type: String,
+        enum: ['application', 'interview', 'offer', 'rejection', 'job_alert', 'other'],
+        default: 'application'
+    },
+    rawClassification: {
+        type: mongoose.Schema.Types.Mixed // Stores AI's full JSON output for future reprocessing
     },
     trashed: {
         type: Boolean,
