@@ -106,21 +106,45 @@ export const ScanProvider = ({ children }) => {
         eventSource.addEventListener('complete', (e) => {
             try {
                 const data = JSON.parse(e.data);
-                setScanLogs(prev => [...prev, { type: 'success', text: `Scan complete. Processed ${data.stats.processed}, Skipped ${data.stats.skipped}`, timestamp: new Date().toLocaleTimeString() }]);
+
+                // Use backend stats if available (most accurate)
+                let finalScanned = scanned;
+                let finalFound = found;
+                let finalAllEmails = allEmails;
+
+                // Backend sends comprehensive stats and results
+                if (data.stats && data.results && Array.isArray(data.results)) {
+                    finalScanned = data.stats.totalScanned || data.results.length;
+                    finalFound = data.stats.newJobs || data.results.filter(r => r.status && r.status !== 'skipped' && r.status !== 'error').length;
+
+                    // Map backend results to UI format
+                    finalAllEmails = data.results.map(r => ({
+                        subject: r.subject || "Unknown Subject",
+                        from: r.from || "Unknown Sender",
+                        isJobEmail: r.status && r.status !== 'skipped' && r.status !== 'error',
+                        classification: r.status === 'skipped' ? (r.reason || 'Skipped') : (r.status || 'Unknown')
+                    }));
+                }
+
+                setScanLogs(prev => [...prev, {
+                    type: 'success',
+                    text: `Scan complete. Total: ${finalScanned}, Jobs: ${finalFound}, Others: ${finalScanned - finalFound}`,
+                    timestamp: new Date().toLocaleTimeString()
+                }]);
                 setScanProgress(100);
                 setScanStatus('Complete');
                 scanSuccess = true;
 
-                // Dispatch global event for legacy components or history tracking
+                // Dispatch global event for ScanLogs component
                 window.dispatchEvent(new CustomEvent('scanComplete', {
                     detail: {
                         success: true,
-                        emailsFound: found, // simplified tracking
-                        emailsScanned: scanned,
+                        emailsFound: finalFound,
+                        emailsScanned: finalScanned,
                         query: finalQuery,
                         scanSource,
                         dateRange,
-                        allEmails, // best effort
+                        allEmails: finalAllEmails,
                         jobEmails
                     }
                 }));

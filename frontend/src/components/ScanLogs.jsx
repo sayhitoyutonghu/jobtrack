@@ -365,11 +365,9 @@ const ScanLogs = () => {
                                                                 {email.isJobEmail ? '✅ JOB' : '❌ OTHER'}
                                                             </div>
                                                         </div>
-                                                        {email.isJobEmail && (
-                                                            <div className="text-[10px] text-green-700 mt-1">
-                                                                Classification: <span className="font-bold uppercase">{email.classification}</span>
-                                                            </div>
-                                                        )}
+                                                        <div className={`text-[10px] mt-1 ${email.isJobEmail ? 'text-green-700' : 'text-zinc-500'}`}>
+                                                            {email.isJobEmail ? 'Classification: ' : 'Reason: '}<span className="font-bold uppercase">{email.classification}</span>
+                                                        </div>
                                                     </div>
                                                 ))}
                                             </div>
