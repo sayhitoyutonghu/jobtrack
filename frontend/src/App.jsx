@@ -153,7 +153,7 @@ const MainApp = () => {
                 Currently in Private Beta. <br />
                 Sign in restricted to approved testers.
               </p>
-              <div className="mt-4 pt-4 border-t border-zinc-100">
+              <div className="mt-4 pt-4 border-t border-zinc-100 text-center">
                 <p className="text-xs text-zinc-500 mb-1">For access to the private beta, please contact:</p>
                 <a href="mailto:sayhitoyutonghu@gmail.com" className="block text-xs font-bold text-black hover:underline mb-2">
                   sayhitoyutonghu@gmail.com
